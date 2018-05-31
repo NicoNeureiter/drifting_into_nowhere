@@ -21,8 +21,9 @@ def bounding_box(points, margin=None):
 
     return x_min, y_min, x_max, y_max
 
+
 def newick_tree(root):
     if root.children:
-        return '(' + ','.join(map(newick_tree, root.children))
+        return '(' + ', '.join(map(newick_tree, root.children)) + ')'
     else:
         return root.name

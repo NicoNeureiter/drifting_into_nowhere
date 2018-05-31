@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from src.simulation import simulate_evolution
+from src.beast_interface import write_nexus, write_locations
 
 
 if __name__ == '__main__':
@@ -25,11 +26,11 @@ if __name__ == '__main__':
         plt.plot([x1, x2], [y1, y2], c='green')
 
     history = simulation.get_history()
+    f_hist = history.feature_history
+    g_hist = history.geo_history
+
+    write_nexus(simulation, f_hist[-1], path ='data/nowhere.nex')
+    write_locations(g_hist[-1], path='data/nowhere_locations.txt')
 
     # history.animate_geo_history()
-    # history.plot_geo_history()
-
-    h = history.feature_history
-    from src.beast_interface import write_nexus
-    write_nexus(h[-1], path = 'data/simu.nex')
-
+    history.plot_geo_history()

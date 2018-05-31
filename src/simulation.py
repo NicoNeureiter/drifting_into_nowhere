@@ -10,7 +10,7 @@ import matplotlib.animation as animation
 from scipy import signal
 from numpy.random import multivariate_normal as gaussian
 
-from src.util import bounding_box
+from src.util import bounding_box, newick_tree
 
 
 class GeoState(object):
@@ -71,12 +71,13 @@ class State(object):
 
     def __init__(self, features, location, rate, geo_step_mean, geo_step_cov,
                  location_history=None, feature_history=None,
-                 parent=None, children=None):
+                 parent=None, children=None, name=''):
         self.geoState = GeoState(location, geo_step_mean, geo_step_cov, location_history)
         self.featureState = FeatureState(features, rate, feature_history)
 
         self.parent = parent
         self.children = children or []
+        self.name = name  # TODO set/use name
 
     @property
     def location_history(self):
@@ -116,38 +117,38 @@ class Simulation(object):
 
         self.root = State(start_features, start_location, rate, step_mean, self.step_cov)
         self.history = [self.root]
-        self.sites = [self.root.create_child()]
+        self.societies = [self.root.create_child()]
 
     @property
     def n_sites(self):
-        return len(self.sites)
+        return len(self.societies)
 
     @property
     def n_internal(self):
         return len(self.history)
 
     def step(self):
-        for i, site in enumerate(self.sites):
-            site.step()
+        for i, society in enumerate(self.societies):
+            society.step()
 
         if np.random.random() < self.p_split:
             i = np.random.randint(0, self.n_sites)
             self.split(i)
 
     def split(self, i):
-        geo_state: State = self.sites[i]
+        society = self.societies[i]
 
-        self.history.append(geo_state)
+        self.history.append(society)
 
-        c1 = geo_state.create_child()
-        c2 = geo_state.create_child()
+        c1 = society.create_child()
+        c2 = society.create_child()
 
-        self.sites[i] = c1
-        self.sites.append(c2)
+        self.societies[i] = c1
+        self.societies.append(c2)
 
     def get_tree(self):
         vertices = []
-        for i, s in enumerate(self.sites + self.history):
+        for i, s in enumerate(self.societies + self.history):
             vertices.append(s)
             s.id = i
 
@@ -163,15 +164,19 @@ class Simulation(object):
         return vertices, edges
 
     def get_newick_tree(self):
-        for i, s in enumerate(self.sites + self.history):
-            # TODO
-            s.id = i
+        for i, s in enumerate(self.societies):
+            s.name = 'society_%i' % i
+        for i, s in enumerate(self.history):
+            s.name = 'fossil_%i' % i
+
+        print(self.root.children)
+        return newick_tree(self.root.children[0])
 
     def get_features(self):
-        return [s.featureState.features for s in self.sites]
+        return [s.featureState.features for s in self.societies]
 
     def get_locations(self):
-        return [s.geoState.location for s in self.sites]
+        return [s.geoState.location for s in self.societies]
 
     def get_history(self):
         location_history = self.get_location_history()
@@ -179,10 +184,10 @@ class Simulation(object):
         return History(location_history, feature_history)
 
     def get_location_history(self):
-        return np.array([s.location_history for s in self.sites]).swapaxes(0, 1)
+        return np.array([s.location_history for s in self.societies]).swapaxes(0, 1)
 
     def get_feature_history(self):
-        return np.array([s.feature_history for s in self.sites]).swapaxes(0, 1)
+        return np.array([s.feature_history for s in self.societies]).swapaxes(0, 1)
 
 @attr.s
 class History(object):
@@ -249,7 +254,7 @@ class History(object):
 def simulate_evolution(n_steps, n_features):
 
     rate = 0.1
-    step_mean = [0.1, 0.]
+    step_mean = [0., 0.]
     step_variance = 1.
     p_split = 0.2
 

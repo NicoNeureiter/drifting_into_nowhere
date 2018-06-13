@@ -2,35 +2,46 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
+import os
 
-import numpy as np
-import matplotlib.pyplot as plt
-
-from src.simulation import simulate_evolution
-from src.beast_interface import write_nexus, write_locations
+from src.evaluation import check_root_in_hpd
+from src.simulation import Simulation
+from src.beast_interface import write_beast_xml
+from src.plotting import plot_walk, animate_walk
 
 
 if __name__ == '__main__':
+    if not os.path.exists('data/beast'):
+        os.mkdir('data/beast')
 
-    N_STEPS = 60
-    N_FEATURES = 20
+    NEXUS_PATH = 'data/nowhere.nex'
+    LOCATIONS_PATH = 'data/nowhere_locations.txt'
+    XML_PATH = 'data/beast/nowhere.xml'
+    SCRIPT_PATH = 'src/beast_pipeline.sh'
+    TREE_PATH = 'data/beast/nowhere.tree'
 
-    simulation = simulate_evolution(N_STEPS, N_FEATURES)
+    # Simulation Parameters
+    N_STEPS = 40
+    N_FEATURES = 50
 
-    vertices, edges = simulation.get_tree()
-    locs = np.array([v.geoState.location for v in vertices])
-    plt.scatter(*locs.T, c='k', lw=0)
-    for v1, v2 in edges:
-        x1, y1 = vertices[v1].geoState.location
-        x2, y2 = vertices[v2].geoState.location
-        plt.plot([x1, x2], [y1, y2], c='green')
+    RATE_OF_CHANGE = 0.1
+    STEP_MEAN = [.01, 0.]
+    STEP_VARIANCE = 1.
+    P_SPLIT = .3
 
-    history = simulation.get_history()
-    f_hist = history.feature_history
-    g_hist = history.geo_history
+    # Run Simulation
+    simulation = Simulation(N_FEATURES, RATE_OF_CHANGE, STEP_MEAN, STEP_VARIANCE, P_SPLIT)
+    simulation.run(N_STEPS)
 
-    write_nexus(simulation, f_hist[-1], path ='data/nowhere.nex')
-    write_locations(g_hist[-1], path='data/nowhere_locations.txt')
+    # Create an XML file as input for the BEAST analysis
+    write_beast_xml(simulation, path=XML_PATH)
 
-    # history.animate_geo_history()
-    history.plot_geo_history()
+    # Run the BEAST analysis + summary of results (treeannotator)
+    os.system('bash %s' % SCRIPT_PATH)
+
+    # Evaluate the results
+    okcool = check_root_in_hpd(TREE_PATH)
+    print('\n\nOk cool: %r' % okcool)
+
+    # Plot the true (simulated) evolution
+    plot_walk(simulation, show_tree=True)

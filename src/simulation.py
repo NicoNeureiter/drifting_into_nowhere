@@ -2,15 +2,11 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
-import attr
 
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from scipy import signal
 from numpy.random import multivariate_normal as gaussian
 
-from src.util import bounding_box, newick_tree
+from src.util import newick_tree
 
 
 class GeoState(object):
@@ -67,17 +63,19 @@ class FeatureState(object):
     def copy(self):
         return self.__copy__()
 
+
 class State(object):
 
     def __init__(self, features, location, rate, geo_step_mean, geo_step_cov,
                  location_history=None, feature_history=None,
-                 parent=None, children=None, name=''):
+                 parent=None, children=None, name='s', age=0):
         self.geoState = GeoState(location, geo_step_mean, geo_step_cov, location_history)
         self.featureState = FeatureState(features, rate, feature_history)
 
         self.parent = parent
         self.children = children or []
         self.name = name  # TODO set/use name
+        self.age = age
 
     @property
     def location_history(self):
@@ -90,14 +88,16 @@ class State(object):
     def step(self):
         self.featureState.step()
         self.geoState.step()
+        self.age += 1
 
     def create_child(self):
         fs = self.featureState.copy()
         gs = self.geoState.copy()
 
+        i = str(len(self.children))
         child = State(fs.features, gs.location, fs.rate, gs.step_mean, gs.step_cov,
                       location_history=gs.location_history, feature_history=fs.feature_history,
-                      parent=self)
+                      parent=self, name=self.name+i)
 
         self.children.append(child)
 
@@ -107,6 +107,7 @@ class State(object):
 class Simulation(object):
 
     def __init__(self, n_features, rate, step_mean, step_variance, p_split):
+        self.n_features = n_features
 
         self.step_mean = np.asarray([10.0, .0])
         self.step_cov = step_variance * np.eye(2)
@@ -116,8 +117,8 @@ class Simulation(object):
         start_location = np.zeros(2)
 
         self.root = State(start_features, start_location, rate, step_mean, self.step_cov)
-        self.history = [self.root]
-        self.societies = [self.root.create_child()]
+        self.history = []
+        self.societies = []
 
     @property
     def n_sites(self):
@@ -127,13 +128,21 @@ class Simulation(object):
     def n_internal(self):
         return len(self.history)
 
-    def step(self):
-        for i, society in enumerate(self.societies):
-            society.step()
+    def run(self, n_steps):
+        self.history = [self.root]
+        self.societies = [self.root.create_child(),
+                          self.root.create_child()]
 
+        for i in range(n_steps):
+            self.step()
+
+    def step(self):
         if np.random.random() < self.p_split:
             i = np.random.randint(0, self.n_sites)
             self.split(i)
+
+        for i, society in enumerate(self.societies):
+            society.step()
 
     def split(self, i):
         society = self.societies[i]
@@ -146,6 +155,8 @@ class Simulation(object):
         self.societies[i] = c1
         self.societies.append(c2)
 
+        print(len(self.societies))
+
     def get_tree(self):
         vertices = []
         for i, s in enumerate(self.societies + self.history):
@@ -155,7 +166,7 @@ class Simulation(object):
         edges = []
         todo = [self.root]
         while todo:
-            s: State = todo.pop()
+            s = todo.pop()
 
             for c in s.children:
                 edges.append((s.id, c.id))
@@ -164,10 +175,10 @@ class Simulation(object):
         return vertices, edges
 
     def get_newick_tree(self):
-        for i, s in enumerate(self.societies):
-            s.name = 'society_%i' % i
-        for i, s in enumerate(self.history):
-            s.name = 'fossil_%i' % i
+        # for i, s in enumerate(self.societies):
+        #     s.name = 'society_%i' % i
+        # for i, s in enumerate(self.history):
+        #     s.name = 'fossil_%i' % i
 
         print(self.root.children)
         return newick_tree(self.root.children[0])
@@ -178,90 +189,9 @@ class Simulation(object):
     def get_locations(self):
         return [s.geoState.location for s in self.societies]
 
-    def get_history(self):
-        location_history = self.get_location_history()
-        feature_history = self.get_feature_history()
-        return History(location_history, feature_history)
-
     def get_location_history(self):
         return np.array([s.location_history for s in self.societies]).swapaxes(0, 1)
 
     def get_feature_history(self):
         return np.array([s.feature_history for s in self.societies]).swapaxes(0, 1)
 
-@attr.s
-class History(object):
-
-    geo_history: np.array = attr.ib(converter=np.asarray)
-    feature_history: np.array  = attr.ib(converter=np.asarray)
-
-    @property
-    def n_steps(self):
-        return self.geo_history.shape[0]
-
-    @property
-    def n_sites(self):
-        return self.geo_history.shape[1]
-
-    @property
-    def n_features(self):
-        return self.feature_history.shape[1]
-
-    def animate_geo_history(self):
-        hist = self.geo_history
-
-        x_min, y_min, x_max, y_max = bounding_box(hist.reshape(-1, 2), margin=0.1)
-
-        fig = plt.figure(figsize=(7, 7))
-        ax = fig.add_axes([0, 0, 1, 1])
-        ax.set_xlim(x_min, x_max), ax.set_xticks([])
-        ax.set_ylim(y_min, y_max), ax.set_yticks([])
-
-        paths = []
-        for i in range(self.n_sites):
-            # w = signal.hann(10)**8.
-            # hist[:, i, 0] = signal.convolve(hist[:, i, 0], w, mode='same') / sum(w)
-            # hist[:, i, 1] = signal.convolve(hist[:, i, 1], w, mode='same') / sum(w)
-            p, = ax.plot([], [], color='grey', alpha=0.1)
-            paths.append(p)
-
-        scat = ax.scatter(*hist[0, :, :].T, color='darkred', lw=0.)
-
-        def update(i_frame):
-            scat.set_offsets(hist[i_frame, :, :])
-            for i, p in enumerate(paths):
-                p.set_data(hist[:i_frame, i, 0], hist[:i_frame, i, 1])
-
-        _ = animation.FuncAnimation(fig, update, frames=self.n_steps-1,
-                                    interval=80, repeat_delay=1000.)
-
-        plt.show()
-
-    def plot_geo_history(self):
-        hist = self.geo_history
-
-        for i in range(self.n_sites):
-            plt.plot(*hist[:, i].T, color='grey', lw=0.2)
-
-        plt.scatter(*hist[0, 0], color='teal')
-        plt.scatter(*hist[-1, :, :].T, color='darkred')
-        plt.show()
-
-    def write_nexus(self):
-        pass
-
-
-def simulate_evolution(n_steps, n_features):
-
-    rate = 0.1
-    step_mean = [0., 0.]
-    step_variance = 1.
-    p_split = 0.2
-
-    simulation = Simulation(n_features, rate, step_mean, step_variance, p_split)
-
-
-    for i in range(n_steps):
-        simulation.step()
-
-    return simulation

@@ -1,0 +1,4 @@
+		<sequence>
+			<taxon idref="{id}"/>
+			{features}
+		</sequence>

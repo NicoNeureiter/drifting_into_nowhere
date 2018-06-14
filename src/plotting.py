@@ -13,16 +13,20 @@ from src.util import bounding_box
 
 def plot_tree(node):
     x, y = node.geoState.location
-    plt.scatter([x], [y], c='k', lw=0, alpha=0.5)
+    # plt.scatter([x], [y], c='k', lw=0, alpha=0.5)
 
     if node.children:
         for c in node.children:
             cx, cy = c.geoState.location
-            plt.plot([x, cx], [y, cy], c='teal', lw=1.)
+            plt.plot([x, cx], [y, cy], c='teal', lw=0.5)
             plot_tree(c)
 
 
-def plot_walk(simulation, show_path=True, show_tree=False):
+def plot_walk(simulation, show_path=True, show_tree=False, ax=None):
+    no_ax = (ax is None)
+    if no_ax:
+        ax = plt.gca()
+
     walk = simulation.get_location_history()
 
     if show_path:
@@ -34,14 +38,15 @@ def plot_walk(simulation, show_path=True, show_tree=False):
             #     np.pad(walk[:, i, 1], (4, 4), 'edge'), w, mode='same')[4:-5] / sum(w)
             plt.plot(*walk[:, i].T, color='grey', lw=0.4)
 
-    plt.scatter(*walk[0, 0], color='teal')
-    plt.scatter(*walk[-1, :, :].T, color='darkred')
+    ax.scatter(*walk[0, 0], color='teal')
+    ax.scatter(*walk[-1, :, :].T, color='darkred')
 
     if show_tree:
         plot_tree(simulation.root)
 
-    plt.axis('off')
-    plt.show()
+    if no_ax:
+        plt.axis('off')
+        plt.show()
 
 
 def animate_walk(simulation):

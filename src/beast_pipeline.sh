@@ -2,8 +2,8 @@
 
 CWD="/home/nico/work/UZH/Projects/drifting_into_nowhere/data/beast"
 
-HPD=80
-BURNIN=1000
+HPD=$1
+BURNIN=$2
 
 cd $CWD
 export BEAST="/opt/phylo/beast"

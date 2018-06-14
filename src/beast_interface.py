@@ -74,7 +74,7 @@ FEATURES_TEMPLATE_PATH = 'data/templates/features_template.xml'
 LOCATION_TEMPLATE_PATH = 'data/templates/location_template.xml'
 
 
-def write_beast_xml(simulation, path):
+def write_beast_xml(simulation, path, chain_length=100000):
     with open(XML_TEMPLATE_PATH, 'r') as xml_template_file:
         xml_template = xml_template_file.read()
     with open(FEATURES_TEMPLATE_PATH, 'r') as features_template_file:
@@ -111,6 +111,7 @@ def write_beast_xml(simulation, path):
                 locations=locations_xml,
                 features=features_xml,
                 tree=tree_xml,
+                chain_length=chain_length,
                 ntax=simulation.n_sites,
                 nchar=simulation.n_features
             )

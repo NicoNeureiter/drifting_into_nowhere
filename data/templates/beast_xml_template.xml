@@ -165,10 +165,11 @@
 
 	<!-- Define operators                                                        -->
 	<operators id="operators" optimizationSchedule="log">
+<!--
 		<deltaExchange delta="0.01" weight="1">
 			<parameter idref="frequencies"/>
 		</deltaExchange>
-
+-->
 		<!-- START Multivariate diffusion model                                      -->
 		<precisionGibbsOperator weight="2">
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
@@ -180,7 +181,7 @@
 	</operators>
 
 	<!-- Define MCMC                                                             -->
-	<mcmc id="mcmc" chainLength="100000" autoOptimize="false" operatorAnalysis="nowhere.ops">
+	<mcmc id="mcmc" chainLength="{chain_length}" autoOptimize="false" operatorAnalysis="nowhere.ops">
 		<posterior id="posterior">
 			<prior id="prior">
 				<uniformPrior lower="0.0" upper="1.0">
@@ -211,7 +212,7 @@
 		<operators idref="operators"/>
 
 		<!-- write log to screen                                                     -->
-		<log id="screenLog" logEvery="1000">
+		<log id="screenLog" logEvery="5000">
 			<column label="Posterior" dp="4" width="12">
 				<posterior idref="posterior"/>
 			</column>

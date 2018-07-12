@@ -11,6 +11,7 @@ from shapely.geometry import Point, Polygon
 
 
 def check_root_in_hpd(tree_file_path, hpd, root=None, ax=None):
+    hpd_regex = 'trait[12]_{hpd}%HPD_[0-9]+={{[0-9,.\\-]+}}'.format(hpd=hpd)
     if root is None:
         root = Point(0, 0)
 
@@ -22,7 +23,7 @@ def check_root_in_hpd(tree_file_path, hpd, root=None, ax=None):
     assert '(' not in root_str
     assert ')' not in root_str
 
-    hpd_strs = re.findall(r'location[12]_95%HPD_[0-9]+={[0-9,.\-]+}', root_str)
+    hpd_strs = re.findall(hpd_regex, root_str)
 
     # No duplicates:
     assert len(hpd_strs) == len(set(hpd_strs))
@@ -34,7 +35,7 @@ def check_root_in_hpd(tree_file_path, hpd, root=None, ax=None):
         hpd_values = hpd_str.partition('{')[-1].partition('}')[0].split(',')
         hpd = np.array([float(x) for x in hpd_values])
 
-        if hpd_str.startswith('location1'):
+        if hpd_str.startswith('trait1'):
             hpds_x.append(hpd)
         else:
             hpds_y.append(hpd)
@@ -43,6 +44,7 @@ def check_root_in_hpd(tree_file_path, hpd, root=None, ax=None):
     polygons = []
     for xs, ys in zip(hpds_x, hpds_y):
         polygons.append(Polygon(zip(xs, ys)))
+        a = Polygon(zip(xs, ys)).area
 
         if ax:
             ax.fill(xs, ys, alpha=0.2, color='teal')

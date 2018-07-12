@@ -14,6 +14,8 @@
 {locations}
 	</taxa>
 
+{fossils}
+
 	<!-- The sequence alignment (each sequence refers to a taxon above).         -->
 	<!-- ntax={ntax} nchar={nchar}                                                        -->
 	<alignment id="alignment" dataType="binary">
@@ -55,17 +57,33 @@
 		<nodeHeights internalNodes="true" rootNode="true">
 			<parameter id="treeModel.allInternalNodeHeights"/>
 		</nodeHeights>
+
+		<nodeTraits name="trait" rootNode="true" internalNodes="false" leafNodes="false" traitDimension="2">
+			<parameter id="rootTrait"/>
+		</nodeTraits>
+		<nodeTraits name="trait" rootNode="true" internalNodes="true" leafNodes="false" traitDimension="2">
+			<parameter id="internalTraits"/>
+		</nodeTraits>
+		<nodeTraits name="trait" rootNode="false" internalNodes="false" leafNodes="true" traitDimension="2">
+			<parameter id="leafTraits"/>
+		</nodeTraits>
+		<nodeTraits name="trait" rootNode="true" internalNodes="true" leafNodes="true" traitDimension="2">
+			<parameter id="allTraits"/>
+		</nodeTraits>
+
+{leaf_traits}
+
 	</treeModel>
 
-	<!-- Generate a coalescent likelihood                                        -->
-	<coalescentLikelihood id="coalescent">
-		<model>
-			<constantSize idref="constant"/>
-		</model>
-		<populationTree>
-			<treeModel idref="treeModel"/>
-		</populationTree>
-	</coalescentLikelihood>
+	<!--&lt;!&ndash; Generate a coalescent likelihood                                        &ndash;&gt;-->
+	<!--<coalescentLikelihood id="coalescent">-->
+		<!--<model>-->
+			<!--<constantSize idref="constant"/>-->
+		<!--</model>-->
+		<!--<populationTree>-->
+			<!--<treeModel idref="treeModel"/>-->
+		<!--</populationTree>-->
+	<!--</coalescentLikelihood>-->
 
 	<!-- The strict clock (Uniform rates across branches)                        -->
 	<strictClockBranchRates id="branchRates">
@@ -101,16 +119,16 @@
 
 	<!-- START Multivariate diffusion model                                      -->
 
-	<multivariateDiffusionModel id="location.diffusionModel">
+	<multivariateDiffusionModel id="trait.diffusionModel">
 		<precisionMatrix>
-			<matrixParameter id="location.precision">
-				<parameter id="location.precision.col1" value="0.05 0.002"/>
-				<parameter id="location.precision.col2" value="0.002 0.05"/>
+			<matrixParameter id="trait.precision">
+				<parameter id="trait.precision.col1" value="0.05 0.002"/>
+				<parameter id="trait.precision.col2" value="0.002 0.05"/>
 			</matrixParameter>
 		</precisionMatrix>
 	</multivariateDiffusionModel>
 
-	<multivariateWishartPrior id="location.precisionPrior" df="2">
+	<multivariateWishartPrior id="trait.precisionPrior" df="2">
 		<scaleMatrix>
 			<matrixParameter>
 				<parameter value="1.0 0.0"/>
@@ -118,12 +136,13 @@
 			</matrixParameter>
 		</scaleMatrix>
 		<data>
-			<parameter idref="location.precision"/>
+			<parameter idref="trait.precision"/>
 		</data>
 	</multivariateWishartPrior>
 
 	<!-- END Multivariate diffusion model                                        -->
 
+{monophyly}
 
 	<!-- Likelihood for tree given sequence data                                 -->
 	<treeLikelihood id="treeLikelihood" useAmbiguities="false">
@@ -135,11 +154,11 @@
 
 	<!-- START Multivariate diffusion model                                      -->
 
-	<multivariateTraitLikelihood id="location.traitLikelihood" traitName="location" useTreeLength="true" scaleByTime="true" reportAsMultivariate="true" reciprocalRates="true" integrateInternalTraits="true">
-		<multivariateDiffusionModel idref="location.diffusionModel"/>
+	<multivariateTraitLikelihood id="trait.traitLikelihood" traitName="trait" useTreeLength="true" scaleByTime="true" reportAsMultivariate="true" reciprocalRates="true" integrateInternalTraits="true">
+		<multivariateDiffusionModel idref="trait.diffusionModel"/>
 		<treeModel idref="treeModel"/>
 		<traitParameter>
-			<parameter id="leaf.location"/>
+			<parameter id="allTraits"/>
 		</traitParameter>
 		<conjugateRootPrior>
 			<meanParameter>
@@ -150,18 +169,34 @@
 			</priorSampleSize>
 		</conjugateRootPrior>
 	</multivariateTraitLikelihood>
-	<correlation id="location.correlation" dimension1="1" dimension2="2">
-		<matrixParameter idref="location.precision"/>
+	<correlation id="trait.correlation" dimension1="1" dimension2="2">
+		<matrixParameter idref="trait.precision"/>
 	</correlation>
-	<matrixInverse id="location.varCovar">
-		<matrixParameter idref="location.precision"/>
+	<matrixInverse id="trait.varCovar">
+		<matrixParameter idref="trait.precision"/>
 	</matrixInverse>
-	<continuousDiffusionStatistic id="location.diffusionRate">
-		<multivariateTraitLikelihood idref="location.traitLikelihood"/>
+	<continuousDiffusionStatistic id="trait.diffusionRate">
+		<multivariateTraitLikelihood idref="trait.traitLikelihood"/>
 	</continuousDiffusionStatistic>
 
 	<!-- END Multivariate diffusion model                                        -->
 
+	<!-- START Root location prior                                        -->
+	<multivariateNormalPrior id="rootPrior">
+	   <meanParameter>
+		 <parameter value="{root_x} {root_y}"/>
+		   </meanParameter>
+	   	<precisionParameter>
+	 		<matrixParameter>
+	   			<parameter value="{root_precision} 0.0"/>
+	   			<parameter value="0.0 {root_precision}"/>
+	 		</matrixParameter>
+	   	</precisionParameter>
+	  	<data>
+	 		<parameter idref="rootTrait"/>
+	  	</data>
+	 </multivariateNormalPrior>
+	<!-- END Root location prior                                  -->
 
 	<!-- Define operators                                                        -->
 	<operators id="operators" optimizationSchedule="log">
@@ -172,16 +207,26 @@
 -->
 		<!-- START Multivariate diffusion model                                      -->
 		<precisionGibbsOperator weight="2">
-			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
-			<multivariateWishartPrior idref="location.precisionPrior"/>
+			<multivariateTraitLikelihood idref="trait.traitLikelihood"/>
+			<multivariateWishartPrior idref="trait.precisionPrior"/>
 		</precisionGibbsOperator>
 
+    	<randomWalkOperator windowSize="0.1" weight="1">
+			<parameter idref="rootTrait"/>
+	    </randomWalkOperator>
+
+        <traitGibbsOperator weight="50" onlyInternalNodes="false">
+			<multivariateTraitLikelihood idref="traitLikelihood"/>
+			<multivariateNormalPrior idref="rootPrior"/>
+
+{geoprior_references}
+		</traitGibbsOperator>
 		<!-- END Multivariate diffusion model                                        -->
 
 	</operators>
 
 	<!-- Define MCMC                                                             -->
-	<mcmc id="mcmc" chainLength="{chain_length}" autoOptimize="false" operatorAnalysis="nowhere.ops">
+	<mcmc id="mcmc" chainLength="{chain_length}" autoOptimize="true" operatorAnalysis="nowhere.ops">
 		<posterior id="posterior">
 			<prior id="prior">
 				<uniformPrior lower="0.0" upper="1.0">
@@ -190,12 +235,12 @@
 				<oneOnXPrior>
 					<parameter idref="constant.popSize"/>
 				</oneOnXPrior>
-				<coalescentLikelihood idref="coalescent"/>
+				<!--<coalescentLikelihood idref="coalescent"/>-->
 				<strictClockBranchRates idref="branchRates"/>
 
 				<!-- START Multivariate diffusion model                                      -->
-				<multivariateWishartPrior idref="location.precisionPrior"/>
-
+				<multivariateWishartPrior idref="trait.precisionPrior"/>
+				<multivariateNormalPrior idref="rootPrior"/>
 				<!-- END Multivariate diffusion model                                        -->
 
 			</prior>
@@ -203,7 +248,7 @@
 				<treeLikelihood idref="treeLikelihood"/>
 
 				<!-- START Multivariate diffusion model                                      -->
-				<multivariateTraitLikelihood idref="location.traitLikelihood"/>
+				<multivariateTraitLikelihood idref="trait.traitLikelihood"/>
 
 				<!-- END Multivariate diffusion model                                        -->
 
@@ -238,22 +283,23 @@
 			<rateStatistic idref="meanRate"/>
 
 			<!-- START Multivariate diffusion model                                      -->
-			<matrixParameter idref="location.precision"/>
-			<correlation idref="location.correlation"/>
-			<matrixInverse idref="location.varCovar"/>
-			<continuousDiffusionStatistic idref="location.diffusionRate"/>
+			<matrixParameter idref="trait.precision"/>
+			<correlation idref="trait.correlation"/>
+			<matrixInverse idref="trait.varCovar"/>
+			<continuousDiffusionStatistic idref="trait.diffusionRate"/>
 
 			<!-- END Multivariate diffusion model                                        -->
 
 			<treeLikelihood idref="treeLikelihood"/>
 			<strictClockBranchRates idref="branchRates"/>
+			<parameter idref="rootTrait"/>
 
 			<!-- START Multivariate diffusion model                                      -->
-			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
+			<multivariateTraitLikelihood idref="trait.traitLikelihood"/>
 
 			<!-- END Multivariate diffusion model                                        -->
 
-			<coalescentLikelihood idref="coalescent"/>
+			<!--<coalescentLikelihood idref="coalescent"/>-->
 		</log>
 
 		<!-- write tree log to file                                                  -->
@@ -265,16 +311,16 @@
 			<posterior idref="posterior"/>
 
 			<!-- START Ancestral state reconstruction                                    -->
-			<trait name="location" tag="location">
-				<multivariateTraitLikelihood idref="location.traitLikelihood"/>
+			<trait name="trait" tag="trait">
+				<multivariateTraitLikelihood idref="trait.traitLikelihood"/>
 			</trait>
 
 			<!-- END Ancestral state reconstruction                                      -->
 
 
 			<!-- START Multivariate diffusion model                                      -->
-			<multivariateDiffusionModel idref="location.diffusionModel"/>
-			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
+			<multivariateDiffusionModel idref="trait.diffusionModel"/>
+			<multivariateTraitLikelihood idref="trait.traitLikelihood"/>
 
 			<!-- END Multivariate diffusion model                                        -->
 

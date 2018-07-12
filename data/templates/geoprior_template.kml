@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://earth.google.com/kml/2.2">
+	<polygon id="{id}"  fillValue="0.5">
+		<coordinates>
+			{left},{top},0
+			{right},{top},0
+			{right},{bottom},0
+			{left},{bottom},0
+		</coordinates>
+	</polygon>
+</kml>

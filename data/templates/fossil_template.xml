@@ -1,0 +1,3 @@
+	<taxa id="{id}">
+{descendants}
+	</taxa>

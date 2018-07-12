@@ -1,0 +1,11 @@
+#NEXUS
+BEGIN DATA;
+    DIMENSIONS NTAX={n_societies} NCHAR={n_features};
+    FORMAT DATATYPE=standard SYMBOLS={symbols} MISSING=? GAP=-;
+    MATRIX
+{data}\t;
+END;
+
+BEGIN TREES;
+      TREE original_tree = {tree};
+END;

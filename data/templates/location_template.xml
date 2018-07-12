@@ -1,16 +1,4 @@
 		<taxon id="{id}">
-			<attr name="x">
-				{x}
-			</attr>
-			<attr name="y">
-				{y}
-			</attr>
-
-			<!-- START Multivariate diffusion model                                      -->
-			<attr name="location">
-				{x} {y}
-			</attr>
-
-			<!-- END Multivariate diffusion model                                        -->
-
+			<date value="0" direction="backwards" units="years"/>
+			<attr name="trait">{x} {y}</attr>
 		</taxon>

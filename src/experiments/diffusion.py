@@ -14,21 +14,21 @@ from src.plotting import plot_walk
 
 
 if __name__ == '__main__':
-    if not os.path.exists('data/beast'):
-        os.mkdir('data/beast')
+    if not os.path.exists('data/diffusion'):
+        os.mkdir('data/diffusion')
     if not os.path.exists('results'):
         os.mkdir('results')
-    if not os.path.exists('results/no_drift'):
-        os.mkdir('results/no_drift')
+    if not os.path.exists('results/diffusion'):
+        os.mkdir('results/diffusion')
 
-    logging.basicConfig(filename='results/no_drift/nowhere.log', level=logging.DEBUG)
+    logging.basicConfig(filename='results/diffusion/nowhere.log', level=logging.DEBUG)
     logging.getLogger().addHandler(logging.StreamHandler())
 
-    NEXUS_PATH = 'data/nowhere.nex'
-    LOCATIONS_PATH = 'data/nowhere_locations.txt'
-    XML_PATH = 'data/beast/nowhere.xml'
+    logging.info('\n################################  NEW RUN  ################################')
+
     SCRIPT_PATH = 'src/beast_pipeline.sh'
-    TREE_PATH = 'data/beast/nowhere.tree'
+    XML_PATH = 'data/diffusion/nowhere.xml'
+    TREE_PATH = 'data/diffusion/nowhere.tree'
 
     # Experiment settings
     N_RUNS = 50
@@ -43,8 +43,8 @@ if __name__ == '__main__':
     P_SPLIT = .3
 
     # Analysis Parameters
-    CHAIN_LENGTH = 2000000
-    BURNIN = 20000
+    CHAIN_LENGTH = 1000000
+    BURNIN = 10000
     HPD = 90
 
     okcools = 0
@@ -60,9 +60,8 @@ if __name__ == '__main__':
         write_beast_xml(simulation, path=XML_PATH, chain_length=CHAIN_LENGTH)
 
         # Run the BEAST analysis + summary of results (treeannotator)
-        os.system('bash {script} {hpd} {burnin}'.format(script=SCRIPT_PATH,
-                                                        hpd=HPD,
-                                                        burnin=BURNIN))
+        os.system('bash {script} {hpd} {burnin} {cwd}'.format(
+            script=SCRIPT_PATH, hpd=HPD, burnin=BURNIN, cwd='data/diffusion/'))
 
         # Evaluate the results
         okcool = check_root_in_hpd(TREE_PATH, HPD, ax=ax)
@@ -75,12 +74,13 @@ if __name__ == '__main__':
 
         plt.axis('off')
         plt.tight_layout()
-        plt.savefig('results/no_drift/run_%i.pdf' % i_run, format='pdf')
+        plt.savefig('results/diffusion/run_%i.pdf' % i_run, format='pdf')
 
 
     print(okcools)
     print(okcools / N_RUNS)
 
-    logging.info('Experiments finished...\n\n################  RESULTS  ################')
+    logging.info('Experiments finished...\n\n'
+                 '################################  RESULTS  ################################')
     logging.info('Successes: %i', okcools)
     logging.info('Probability coverage (%i hpd): %.4f', HPD, (okcools / N_RUNS))

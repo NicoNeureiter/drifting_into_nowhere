@@ -66,16 +66,43 @@ class FeatureState(object):
 
 class State(object):
 
+    """This class captures the state for one society in the simulation. It
+    is composed of the feature state and the geographic state and provides
+    interfaces to the societies (features and geo) history (previous states).
+
+    Attributes:
+        geoState (GeoState): Describes the location of the society.
+        featureState (FeatureState): Describes the (e.g. language) features of
+            the society.
+        parent (State): The state of the parent society (historical predecessor).
+        children (List[State]): The successor societies.
+        _name (str): A name code, implicitly representing the history of the state.
+        age (float): The age of this specific society (since the last split).
+    """
+
     def __init__(self, features, location, rate, geo_step_mean, geo_step_cov,
                  location_history=None, feature_history=None,
-                 parent=None, children=None, name='s', age=0):
+                 parent=None, children=None, name='', age=0.):
         self.geoState = GeoState(location, geo_step_mean, geo_step_cov, location_history)
         self.featureState = FeatureState(features, rate, feature_history)
 
         self.parent = parent
         self.children = children or []
-        self.name = name  # TODO set/use name
+        self._name = name
         self.age = age
+
+    @property
+    def name(self):
+        """Appends a prefix to the state code, depending on whether it is a
+        historical or a present society.
+
+        Returns:
+            str: The name of the state
+        """
+        if self.children:
+            return 'fossil_' + self._name
+        else:
+            return 'society_' + self._name
 
     @property
     def location_history(self):
@@ -97,7 +124,7 @@ class State(object):
         i = str(len(self.children))
         child = State(fs.features, gs.location, fs.rate, gs.step_mean, gs.step_cov,
                       location_history=gs.location_history, feature_history=fs.feature_history,
-                      parent=self, name=self.name+i)
+                      parent=self, name=self._name+i)
 
         self.children.append(child)
 
@@ -175,13 +202,7 @@ class Simulation(object):
         return vertices, edges
 
     def get_newick_tree(self):
-        # for i, s in enumerate(self.societies):
-        #     s.name = 'society_%i' % i
-        # for i, s in enumerate(self.history):
-        #     s.name = 'fossil_%i' % i
-
-        print(self.root.children)
-        return newick_tree(self.root.children[0])
+        return newick_tree(self.root)
 
     def get_features(self):
         return [s.featureState.features for s in self.societies]

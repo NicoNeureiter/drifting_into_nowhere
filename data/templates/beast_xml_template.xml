@@ -143,10 +143,10 @@
 		</traitParameter>
 		<conjugateRootPrior>
 			<meanParameter>
-				<parameter value="0.0 0.0"/>
+				<parameter value="{root_x} {root_y}"/>
 			</meanParameter>
 			<priorSampleSize>
-				<parameter value="0.001"/>
+				<parameter value="{root_precision}"/>
 			</priorSampleSize>
 		</conjugateRootPrior>
 	</multivariateTraitLikelihood>

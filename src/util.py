@@ -26,6 +26,7 @@ def newick_tree(state):
     if state.children:
         subtrees = ', '.join(map(newick_tree, state.children))
         # return '(%s)h%s:%.1f' % (subtrees, state.name, state.age)
+        # return '(%s)[&label="%s"]:%.1f' % (subtrees, 'h'+state.name, state.age)
         return '(%s):%.1f' % (subtrees, state.age)
     else:
         return '%s:%.1f' % (state.name, state.age)

@@ -11,6 +11,7 @@ from shapely.geometry import Point, Polygon
 
 
 def check_root_in_hpd(tree_file_path, hpd, root=None, ax=None):
+    hpd_regex = 'location[12]_{hpd}%HPD_[0-9]+={{[0-9,.\\-]+}}'.format(hpd=hpd)
     if root is None:
         root = Point(0, 0)
 
@@ -22,7 +23,7 @@ def check_root_in_hpd(tree_file_path, hpd, root=None, ax=None):
     assert '(' not in root_str
     assert ')' not in root_str
 
-    hpd_strs = re.findall(r'location[12]_95%HPD_[0-9]+={[0-9,.\-]+}', root_str)
+    hpd_strs = re.findall(hpd_regex, root_str)
 
     # No duplicates:
     assert len(hpd_strs) == len(set(hpd_strs))
@@ -43,6 +44,7 @@ def check_root_in_hpd(tree_file_path, hpd, root=None, ax=None):
     polygons = []
     for xs, ys in zip(hpds_x, hpds_y):
         polygons.append(Polygon(zip(xs, ys)))
+        a = Polygon(zip(xs, ys)).area
 
         if ax:
             ax.fill(xs, ys, alpha=0.2, color='teal')

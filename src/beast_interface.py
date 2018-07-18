@@ -74,7 +74,7 @@ FEATURES_TEMPLATE_PATH = 'data/templates/features_template.xml'
 LOCATION_TEMPLATE_PATH = 'data/templates/location_template.xml'
 
 
-def write_beast_xml(simulation, path, chain_length=100000):
+def write_beast_xml(simulation, path, chain_length=100000, fix_root=False):
     with open(XML_TEMPLATE_PATH, 'r') as xml_template_file:
         xml_template = xml_template_file.read()
     with open(FEATURES_TEMPLATE_PATH, 'r') as features_template_file:
@@ -96,7 +96,7 @@ def write_beast_xml(simulation, path, chain_length=100000):
         features_xml += features_template.format(id=name, features=fs_str)
 
     for i, state in enumerate(simulation.history):
-        name = 'h' + state.name
+        name = state.name
 
         locations_xml += '\t\t<taxon id="{name}"/>\n'.format(name=name)
 
@@ -105,12 +105,21 @@ def write_beast_xml(simulation, path, chain_length=100000):
 
     tree_xml = simulation.get_newick_tree()
 
+    root = simulation.root.geoState.location
+    if fix_root:
+        root_precision = 1e8
+    else:
+        root_precision = 1e-8
+
     with open(path, 'w') as beast_xml_file:
         beast_xml_file.write(
             xml_template.format(
                 locations=locations_xml,
                 features=features_xml,
                 tree=tree_xml,
+                root_x=root[0],
+                root_y=root[1],
+                root_precision=root_precision,
                 chain_length=chain_length,
                 ntax=simulation.n_sites,
                 nchar=simulation.n_features

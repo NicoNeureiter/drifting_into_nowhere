@@ -6,27 +6,43 @@ from __future__ import absolute_import, division, print_function, \
 import numpy as np
 from numpy.random import multivariate_normal as gaussian
 
-from src.util import newick_tree
+from src.tree import Node
+from src.util import newick_tree, bernoulli
 
 
 class GeoState(object):
 
-    def __init__(self, location, step_mean, step_cov, location_history=None):
+    def __init__(self, location, step_mean, step_cov, location_history=None,
+                 drift_frequency=1.):
         self.location = np.asarray(location)
         self.step_mean = np.asarray(step_mean)
         self.step_cov = np.asarray(step_cov)
+        self.drift_frequency = drift_frequency
 
         if location_history is None:
             self.location_history = [self.location]
         else:
             self.location_history = location_history
 
-    def step(self):
-        self.location = self.location + gaussian(self.step_mean, self.step_cov)
+    def step(self, step_mean=None, step_cov=None):
+        if step_mean is None:
+            if bernoulli(self.drift_frequency):
+                step_mean = self.step_mean
+            else:
+                step_mean = np.zeros(2)
+
+        if step_cov is None:
+            step_cov = self.step_cov
+        else:
+            # TODO do this elegantly
+            step_cov = step_cov * np.eye(2)
+
+
+        self.location = self.location + gaussian(step_mean, step_cov)
         self.location_history.append(self.location)
 
     def __copy__(self):
-        return GeoState(self.location.copy(), self.step_mean, self.step_cov,
+        return GeoState(self.location.copy(), self.step_mean.copy(), self.step_cov.copy(),
                         self.location_history.copy())
 
     def copy(self):
@@ -53,7 +69,7 @@ class FeatureState(object):
             self.feature_history = feature_history
 
     def step(self):
-        step = np.random.binomial(1, p=self.rate, size=self.n_features)
+        step = bernoulli(p=self.rate, size=self.n_features)
         self.features = np.logical_xor(self.features, step)
         self.feature_history.append(self.features)
 
@@ -64,7 +80,7 @@ class FeatureState(object):
         return self.__copy__()
 
 
-class State(object):
+class State(Node):
 
     """This class captures the state for one society in the simulation. It
     is composed of the feature state and the geographic state and provides
@@ -77,19 +93,21 @@ class State(object):
         parent (State): The state of the parent society (historical predecessor).
         children (List[State]): The successor societies.
         _name (str): A name code, implicitly representing the history of the state.
-        age (float): The age of this specific society (since the last split).
+        length (float): The age of this specific society (since the last split).
     """
 
     def __init__(self, features, location, rate, geo_step_mean, geo_step_cov,
+                 drift_frequency=1.,
                  location_history=None, feature_history=None,
-                 parent=None, children=None, name='', age=0.):
-        self.geoState = GeoState(location, geo_step_mean, geo_step_cov, location_history)
+                 parent=None, children=None, name='', length=0):
+        self.geoState = GeoState(location, geo_step_mean, geo_step_cov, location_history,
+                                 drift_frequency = drift_frequency)
         self.featureState = FeatureState(features, rate, feature_history)
 
         self.parent = parent
         self.children = children or []
         self._name = name
-        self.age = age
+        self.length = length
 
     @property
     def name(self):
@@ -106,16 +124,16 @@ class State(object):
 
     @property
     def location_history(self):
-        return self.geoState.location_history
+        return np.asarray(self.geoState.location_history)
 
     @property
     def feature_history(self):
-        return self.featureState.feature_history
+        return np.asarray(self.featureState.feature_history)
 
-    def step(self):
+    def step(self, step_mean=None, step_cov=None):
         self.featureState.step()
-        self.geoState.step()
-        self.age += 1
+        self.geoState.step(step_mean, step_cov)
+        self.length += 1
 
     def create_child(self):
         fs = self.featureState.copy()
@@ -130,20 +148,24 @@ class State(object):
 
         return child
 
+    def __repr__(self):
+        return self.name
 
 class Simulation(object):
 
-    def __init__(self, n_features, rate, step_mean, step_variance, p_split):
+    def __init__(self, n_features, rate, step_mean, step_variance, p_split,
+                 drift_frequency=1.):
         self.n_features = n_features
 
         self.step_mean = np.asarray([10.0, .0])
         self.step_cov = step_variance * np.eye(2)
         self.p_split = p_split
+        self.drift_frequency = drift_frequency
 
         start_features = np.zeros(n_features, dtype=bool)
         start_location = np.zeros(2)
 
-        self.root = State(start_features, start_location, rate, step_mean, self.step_cov)
+        self.root = State(start_features, start_location, rate, step_mean, self.step_cov, drift_frequency=drift_frequency)
         self.history = []
         self.societies = []
 
@@ -164,7 +186,7 @@ class Simulation(object):
             self.step()
 
     def step(self):
-        if np.random.random() < self.p_split:
+        if bernoulli(self.p_split):
             i = np.random.randint(0, self.n_sites)
             self.split(i)
 
@@ -181,8 +203,6 @@ class Simulation(object):
 
         self.societies[i] = c1
         self.societies.append(c2)
-
-        print(len(self.societies))
 
     def get_tree(self):
         vertices = []
@@ -205,14 +225,13 @@ class Simulation(object):
         return newick_tree(self.root)
 
     def get_features(self):
-        return [s.featureState.features for s in self.societies]
+        return np.array([s.featureState.features for s in self.societies])
 
     def get_locations(self):
-        return [s.geoState.location for s in self.societies]
+        return np.array([s.geoState.location for s in self.societies])
 
     def get_location_history(self):
         return np.array([s.location_history for s in self.societies]).swapaxes(0, 1)
 
     def get_feature_history(self):
         return np.array([s.feature_history for s in self.societies]).swapaxes(0, 1)
-

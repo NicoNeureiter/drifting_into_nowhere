@@ -10,10 +10,11 @@ from matplotlib import pyplot as plt
 from shapely.geometry import Point, Polygon
 
 
-def check_root_in_hpd(tree_file_path, hpd, root=None, ax=None):
+def check_root_in_hpd(tree_file_path, hpd, root, ax=None):
     hpd_regex = 'location[12]_{hpd}%HPD_[0-9]+={{[0-9,.\\-]+}}'.format(hpd=hpd)
-    if root is None:
-        root = Point(0, 0)
+    if not isinstance(root, Point):
+        assert len(root) == 2
+        root = Point(root[0], root[1])
 
     with open(tree_file_path, 'r') as tree_file:
         tree_str = tree_file.read()

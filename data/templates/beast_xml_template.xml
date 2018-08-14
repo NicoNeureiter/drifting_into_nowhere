@@ -134,6 +134,23 @@
 	</treeLikelihood>
 
 	<!-- START Multivariate diffusion model                                      -->
+	<discretizedBranchRates id="location.diffusionRates">
+		<treeModel idref="treeModel"/>
+		<distribution>
+			<logNormalDistributionModel meanInRealSpace="true">
+				<mean>
+					<parameter value="1.0"/>
+				</mean>
+				<stdev>
+					<parameter id="location.stdev" value="1.0" lower="0.0"/>
+				</stdev>
+			</logNormalDistributionModel>
+		</distribution>
+		<rateCategories>
+			<parameter id="location.rrwCategories"/>
+		</rateCategories>
+	</discretizedBranchRates>
+
 
 	<multivariateTraitLikelihood id="location.traitLikelihood" traitName="location" useTreeLength="true" scaleByTime="true" reportAsMultivariate="true" reciprocalRates="true" integrateInternalTraits="true">
 		<multivariateDiffusionModel idref="location.diffusionModel"/>
@@ -141,6 +158,9 @@
 		<traitParameter>
 			<parameter id="leaf.location"/>
 		</traitParameter>
+		<jitter window="{jitter} {jitter}" duplicatesOnly="true">
+			<parameter idref="leaf.location"/>
+		</jitter>
 		<conjugateRootPrior>
 			<meanParameter>
 				<parameter value="{root_x} {root_y}"/>
@@ -149,6 +169,7 @@
 				<parameter value="{root_precision}"/>
 			</priorSampleSize>
 		</conjugateRootPrior>
+		<discretizedBranchRates idref="location.diffusionRates"/>
 	</multivariateTraitLikelihood>
 	<correlation id="location.correlation" dimension1="1" dimension2="2">
 		<matrixParameter idref="location.precision"/>
@@ -156,7 +177,8 @@
 	<matrixInverse id="location.varCovar">
 		<matrixParameter idref="location.precision"/>
 	</matrixInverse>
-	<continuousDiffusionStatistic id="location.diffusionRate">
+	<!--<continuousDiffusionStatistic id="location.diffusionRate">-->
+	<continuousDiffusionStatistic id="location.diffusionRate" greatCircleDistance="true">
 		<multivariateTraitLikelihood idref="location.traitLikelihood"/>
 	</continuousDiffusionStatistic>
 
@@ -170,8 +192,19 @@
 			<parameter idref="frequencies"/>
 		</deltaExchange>
 -->
+
+		<scaleOperator scaleFactor="0.85" weight="5">
+			<parameter idref="location.stdev"/>
+		</scaleOperator>
+		<swapOperator size="1" weight="30" autoOptimize="false">
+			<parameter idref="location.rrwCategories"/>
+		</swapOperator>
+		<uniformIntegerOperator weight="10">
+			<parameter idref="location.rrwCategories"/>
+		</uniformIntegerOperator>
+
 		<!-- START Multivariate diffusion model                                      -->
-		<precisionGibbsOperator weight="2">
+		<precisionGibbsOperator weight="10">
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
 			<multivariateWishartPrior idref="location.precisionPrior"/>
 		</precisionGibbsOperator>
@@ -190,6 +223,9 @@
 				<oneOnXPrior>
 					<parameter idref="constant.popSize"/>
 				</oneOnXPrior>
+				<exponentialPrior mean="0.3333333333333333" offset="0.0">
+					<parameter idref="location.stdev"/>
+				</exponentialPrior>
 				<coalescentLikelihood idref="coalescent"/>
 				<strictClockBranchRates idref="branchRates"/>
 
@@ -228,7 +264,7 @@
 		</log>
 
 		<!-- write log to file                                                       -->
-		<log id="fileLog" logEvery="100" fileName="nowhere.log" overwrite="true">
+		<log id="fileLog" logEvery="500" fileName="nowhere.log" overwrite="true">
 			<posterior idref="posterior"/>
 			<prior idref="prior"/>
 			<likelihood idref="likelihood"/>
@@ -275,6 +311,9 @@
 			<!-- START Multivariate diffusion model                                      -->
 			<multivariateDiffusionModel idref="location.diffusionModel"/>
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
+			<trait name="rate" tag="location.rate">
+				<discretizedBranchRates idref="location.diffusionRates"/>
+			</trait>
 
 			<!-- END Multivariate diffusion model                                        -->
 

@@ -43,7 +43,7 @@ class GeoState(object):
 
     def __copy__(self):
         return GeoState(self.location.copy(), self.step_mean.copy(), self.step_cov.copy(),
-                        self.location_history.copy())
+                        self.location_history.copy(), drift_frequency=self.drift_frequency)
 
     def copy(self):
         return self.__copy__()
@@ -101,7 +101,7 @@ class State(Node):
                  location_history=None, feature_history=None,
                  parent=None, children=None, name='', length=0):
         self.geoState = GeoState(location, geo_step_mean, geo_step_cov, location_history,
-                                 drift_frequency = drift_frequency)
+                                 drift_frequency=drift_frequency)
         self.featureState = FeatureState(features, rate, feature_history)
 
         self.parent = parent
@@ -142,7 +142,7 @@ class State(Node):
         i = str(len(self.children))
         child = State(fs.features, gs.location, fs.rate, gs.step_mean, gs.step_cov,
                       location_history=gs.location_history, feature_history=fs.feature_history,
-                      parent=self, name=self._name+i)
+                      parent=self, name=self._name+i, drift_frequency=gs.drift_frequency)
 
         self.children.append(child)
 

@@ -21,19 +21,31 @@ class Node(object):
         location_attribute (str): Defines the ´attributes´ dict-key for the location attribute.
     """
 
-
-
-    def __init__(self, length, name='', children=None, parent=None, attributes=None,
-                 location_attribute='location'):
+    def __init__(self, length, name='', children=None, parent=None,
+                 attributes=None, location=None):
         self.length = length
         self.name = name
         self.children = [] or children
         self.parent = parent
         self.attributes = {} or attributes
-        self.location_attribute = location_attribute
+        self._location = location
 
         for child in children:
             child.parent = self
+
+    def get_subtree(self, subtree_path: list):
+        if len(subtree_path) == 0:
+            return self
+        else:
+            c_idx, *c_subtree_path = subtree_path
+            return self.children[c_idx].get_subtree(c_subtree_path )
+
+    @property
+    def location(self):
+        if self._location is not None:
+            return self._location
+        else:
+            return self.get_location()
 
     @property
     def tree_size(self):
@@ -57,7 +69,7 @@ class Node(object):
             child.set_location_attribute(location_attribute)
 
     @staticmethod
-    def from_newick(newick):
+    def from_newick(newick, location_key='location'):
         """Create a tree from the Newick representation.
 
         Args:
@@ -67,7 +79,7 @@ class Node(object):
             Node: The parsed tree.
         """
         newick = remove_whitespace(newick)
-        node, _ = parse_node(newick)
+        node, _ = parse_node(newick, location_key=location_key)
         return node
 
     def get_location(self, location_key='location'):
@@ -86,10 +98,6 @@ class Node(object):
             raise ValueError
 
         return np.array([x, y])
-
-    @property
-    def location(self):
-        return self.get_location(self.location_attribute)
 
     def get_edges(self):
         edges = []
@@ -132,15 +140,16 @@ class Node(object):
 
             c.length += self.length
 
-    def to_newick(self):
+    def to_newick(self, write_attributes=True):
         if self.children:
-            children = ','.join([c.to_newick() for c in self.children])
+            children = ','.join([c.to_newick(write_attributes=write_attributes)
+                                 for c in self.children])
             core = '(%s)' % children
         else:
             core = self.name
 
         attr_str = ''
-        if self.attributes:
+        if self.attributes and write_attributes:
             attr_str = ','.join('%s=%s' % kv for kv in self.attributes.items())
             attr_str = '[&%s]' % attr_str
 
@@ -164,7 +173,7 @@ class Node(object):
         return 'node_' + self.name
 
 
-def parse_node(s: str):
+def parse_node(s, location_key='location'):
     """Parse a string in Newick format into a Node object. The Newick string
     might be partially parsed already, i.e. a suffix of a full Newick tree.
 
@@ -183,7 +192,7 @@ def parse_node(s: str):
         # Parse children
         while s.startswith('(') or s.startswith(','):
             s = s[1:]
-            child, s = parse_node(s)
+            child, s = parse_node(s, location_key=location_key)
             children.append(child)
 
         assert s.startswith(')'), '"%s"' % s
@@ -200,6 +209,7 @@ def parse_node(s: str):
     length, s = parse_length(s)
 
     node = Node(length, name=name, children=children, attributes=attributes)
+    node._location = node.get_location(location_key)
     return node, s
 
 

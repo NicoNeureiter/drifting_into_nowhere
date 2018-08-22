@@ -96,3 +96,7 @@ def bernoulli(p, size=None):
         return _random.random() < p
     else:
         return np.random.binomial(1, p=p, size=size).astype(bool)
+
+
+def grey(v):
+    return (v, v, v)

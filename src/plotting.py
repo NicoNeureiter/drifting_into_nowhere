@@ -22,7 +22,7 @@ def plot_tree(node, alpha=1.):
 
 
 def plot_walk(simulation, show_path=True, show_tree=False, ax=None,
-              savefig=None):
+              savefig=None, alpha=0.3):
     no_ax = (ax is None)
     if no_ax:
         ax = plt.gca()
@@ -42,7 +42,7 @@ def plot_walk(simulation, show_path=True, show_tree=False, ax=None,
     ax.scatter(*walk[-1, :, :].T, color='darkred', s=4, lw=0)
 
     if show_tree:
-        plot_tree(simulation.root, alpha=0.2)
+        plot_tree(simulation.root, alpha=alpha)
 
     if savefig is not None:
         plt.axis('off')
@@ -148,7 +148,8 @@ def circular_histogram(x, bins=50, range=(0, TAU), weights=None, ax=None, label=
     # Add label
     ax.plot([], [], c=color, label=label)
 
-    ax.spines['polar'].set_color('lightgrey')
+    # ax.spines['polar'].set_color('grey')
+    ax.spines['polar'].set_linewidth(0.5)
     ax.set_xticklabels(['E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE'])
     ax.set_ylim(0, ylim)
 

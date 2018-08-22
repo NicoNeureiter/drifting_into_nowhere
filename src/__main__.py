@@ -31,10 +31,10 @@ if __name__ == '__main__':
     N_FEATURES = 50
 
     RATE_OF_CHANGE = 0.1
-    TOTAL_DRIFT = 1.
-    TOTAL_DIFFUSION = 5.
-    DRIFT_DENSITY = 1.
-    DRIFT_DIRECTION = normalize([1., 0.])
+    TOTAL_DRIFT = 2.
+    TOTAL_DIFFUSION = 1.
+    DRIFT_DENSITY = .1
+    DRIFT_DIRECTION = normalize([1., 1.])
     P_SPLIT = 1.
 
     # Analysis Parameters
@@ -42,12 +42,19 @@ if __name__ == '__main__':
     BURNIN = 1000
     HPD = 80
 
+    # Check parameter validity
+    assert 0 < RATE_OF_CHANGE <= 1
+    assert 0 < DRIFT_DENSITY <= 1
+    assert 0 < P_SPLIT <= 1
+    assert 0 < HPD < 100
+    assert BURNIN < CHAIN_LENGTH
+
     _step_drift = TOTAL_DRIFT / (N_STEPS * DRIFT_DENSITY)
     step_mean = _step_drift * DRIFT_DIRECTION
     print(_step_drift)
     print(DRIFT_DIRECTION)
     print(step_mean)
-    step_var = TOTAL_DIFFUSION ** 2. / (N_STEPS)
+    step_var = TOTAL_DIFFUSION ** 2. / N_STEPS
     print(step_var)
 
     backbone = []
@@ -102,27 +109,28 @@ if __name__ == '__main__':
     std_sum = 0
     mean_sum = 0
 
-    N_RUNS = 50
+    N_RUNS = 5
     for _ in range(N_RUNS):
         # Run Simulation
-        simulation = Simulation(N_FEATURES, RATE_OF_CHANGE, step_mean, step_var, P_SPLIT)
+        simulation = Simulation(N_FEATURES, RATE_OF_CHANGE, step_mean, step_var, P_SPLIT,
+                                drift_frequency=DRIFT_DENSITY)
         simulation.run(N_STEPS)
         # simulation = simulate_backbone()
 
-        # # Create an XML file as input for the BEAST analysis
-        # write_beast_xml(simulation, path=XML_PATH, chain_length=CHAIN_LENGTH, fix_root=False)
-        #
-        # # Run the BEAST analysis + summary of results (treeannotator)
-        # os.system('bash {script} {hpd} {burnin} {cwd}'.format(
-        #     script=SCRIPT_PATH,
-        #     hpd=HPD,
-        #     burnin=BURNIN,
-        #     cwd=os.getcwd()+'/data/beast/'
-        # ))
-        #
-        # # Evaluate the results
-        # okcool = check_root_in_hpd(TREE_PATH, HPD, root=[0, 0], ax=ax)
-        # print('\n\nOk cool: %r' % okcool)
+        # Create an XML file as input for the BEAST analysis
+        write_beast_xml(simulation, path=XML_PATH, chain_length=CHAIN_LENGTH, fix_root=False)
+
+        # Run the BEAST analysis + summary of results (treeannotator)
+        os.system('bash {script} {hpd} {burnin} {cwd}'.format(
+            script=SCRIPT_PATH,
+            hpd=HPD,
+            burnin=BURNIN,
+            cwd=os.getcwd()+'/data/beast/'
+        ))
+
+        # Evaluate the results
+        okcool = check_root_in_hpd(TREE_PATH, HPD, root=[0, 0], ax=ax, alpha=0.1)
+        print('\n\nOk cool: %r' % okcool)
 
         locs = simulation.get_locations()
         mean = np.mean(locs, axis=0)
@@ -130,11 +138,11 @@ if __name__ == '__main__':
         std_sum += std
         mean_sum += mean
 
-        print('std: ', std)
-        print('mean: ', mean)
+        # print('std: ', std)
+        # print('mean: ', mean)
 
         # Plot the true (simulated) evolution
-        # plot_walk(simulation, show_path=False, show_tree=True, ax=ax)
+        plot_walk(simulation, show_path=False, show_tree=True, ax=ax, alpha=0.05)
 
         plt.scatter(*locs.T, alpha=0.2, lw=0, c='darkblue')
 

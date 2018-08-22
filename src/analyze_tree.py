@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import geopandas as gpd
 
 from src.tree import Node
-from src.util import norm, normalize, dist
+from src.util import norm, normalize, dist, grey
 from src.plotting import circular_histogram
 
 
@@ -35,13 +35,13 @@ def plot_tree(node: Node, color_fun):
         cx, cy = c.location
         color, alpha = color_fun(node, c)
 
+        plot_tree(c, color_fun)
+
         # plt.plot([x, cx], [y, cy], c=color, alpha=alpha)
         plt.arrow(x, y, (cx-x), (cy-y), color=color, alpha=alpha, width=0.07,
                   length_includes_head=True)
-        plot_tree(c, color_fun)
 
 
-diffrates = []
 def color_diffusion_rate(parent, child):
     pxy = parent.location
     cxy = child.location
@@ -54,7 +54,6 @@ def color_diffusion_rate(parent, child):
     rate = dist(pxy, cxy) / dt
     v = 1.1 + 0.15*np.log(rate)
 
-    diffrates.append(v)
     v = np.clip(v, 0., 1.)
     color = cm(1-v)
 
@@ -62,6 +61,19 @@ def color_diffusion_rate(parent, child):
     a = np.clip(height / 500., 0, 1)
 
     return color, a
+
+
+def color_height(parent, child):
+    # cm = plt.get_cmap('plasma')
+    cm = plt.get_cmap('viridis')
+
+    height = (parent['height'] + child['height']) / 2.
+    v = np.clip(height / 500., 0, 1)
+    c = cm(1-v)
+
+    a = 0.5 + 0.5*v
+
+    return c, a
 
 
 # def plot_diffusion_rate(edges):
@@ -73,6 +85,11 @@ def color_diffusion_rate(parent, child):
 
 def angle_to_vector(angle):
     return np.array([np.cos(angle), np.sin(angle)])
+
+
+N_BINS = 28
+COLOR_1 = (0.1, 0.6, 0.75)
+COLOR_2 = (0.5, 0.1, 0.4)
 
 
 def plot_eary_late_drift(tree: Node):
@@ -97,12 +114,11 @@ def plot_eary_late_drift(tree: Node):
             lengths_late.append(length)
 
     # angles_early += list(np.random.random(64000)*np.pi*2)
-    nbins = 16
-    ax = circular_histogram(angles_early, bins=nbins, normed=1, color=(0.1, 0.6, 0.75),
+    ax = circular_histogram(angles_early, bins=N_BINS, normed=1, color=COLOR_1,
                             weights=lengths_early, double_hist=True,
                             label='Step direction - earlier half of the expansion'
                             )
-    ax = circular_histogram(angles_late, bins=nbins, normed=1, color=(0.5, 0.1, 0.4),
+    ax = circular_histogram(angles_late, bins=N_BINS, normed=1, color=COLOR_2,
                             weights=lengths_late, double_hist=True,
                             label='Step direction - later half of the expansion',
                             ax=ax)
@@ -125,13 +141,12 @@ def plot_global_local_drift(tree: Node):
         lengths_from_root.append(norm(step_from_root))
         angles_from_root.append(atan2(step_from_root[1], step_from_root[0]))
 
-    nbins = 16
-    ax = circular_histogram(angles_from_root, bins=nbins, normed=1, color=(0.65, 0.2, 0.6),
+    ax = circular_histogram(angles_from_root, bins=N_BINS, normed=1, color=COLOR_1,
                             weights=lengths_from_root,
                             double_hist=True,
                             label='Directions from root (global drift)'
                             )
-    ax = circular_histogram(angles, bins=nbins, normed=1, color=(0.25, 0.7, 0.85),
+    ax = circular_histogram(angles, bins=N_BINS, normed=1, color=COLOR_2,
                             weights=lengths,
                             double_hist=True,
                             label='Directions from direct ancestor (local drift)',
@@ -142,34 +157,36 @@ def plot_global_local_drift(tree: Node):
 
 
 if __name__ == '__main__':
-    FAMILY = 'bantu'
+    FAMILY = 'ie'
 
     if FAMILY == 'bantu':
         TREE_PATH = 'data/bantu/nowhere.tree'
         LOCATION_KEY = 'location'
         XLIM = (2, 52)
         YLIM = (-35, 15)
-        DRIFT_DIRECTION = angle_to_vector(-0.5)
+        DRIFT_ANGLE = -0.5
+        DRIFT_DIRECTION = angle_to_vector(DRIFT_ANGLE)
 
     elif FAMILY == 'ie':
         TREE_PATH = 'data/indo-european/IE_2MCCs.tre'
         LOCATION_KEY = 'trait'
         XLIM = (-25, 120)
         YLIM = (20, 80)
+        DRIFT_ANGLE = 2.8
+        DRIFT_DIRECTION = angle_to_vector(DRIFT_ANGLE)
 
     else:
         raise ValueError()
 
     # Plot the world map in the background.
     world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
-    ax = world.plot(color=(.95, .95, .95), edgecolor='lightgrey', lw=.4, )
+    ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.4, )
 
     with open(TREE_PATH, 'r') as tree_file:
         nexus_str = tree_file.read()
         newick_str = extract_newick_from_nexus(nexus_str)
-        tree = Node.from_newick(newick_str)
-
-    tree.set_location_attribute(LOCATION_KEY)
+        tree = Node.from_newick(newick_str, location_key=LOCATION_KEY)
+        tree = tree.get_subtree([0, 0, 0, 0])
 
     def color_direction(parent, child):
         # Compute migration direction
@@ -194,19 +211,43 @@ if __name__ == '__main__':
 
         return color, a
 
-    plot_tree(tree, color_diffusion_rate)
+    plot_tree(tree, color_direction)
+
+    root = tree.location
+    print(root)
+    # plt.scatter(HOMELAND[1], HOMELAND[0], marker='*', c=(0., 0.8, .9), s=500, zorder=2)
+    plt.scatter(root[0], root[1], marker='*', c=(.9, 0., .8), s=500, zorder=2)
+
+    cm = plt.get_cmap('PiYG')
+    px, py = -3., 73.
+    l = 4
+    n_arrows = 10
+    arrow_angles = np.linspace(0,2 * np.pi, n_arrows, endpoint=False)
+    arrow_angles = (arrow_angles + DRIFT_ANGLE) % (2 * np.pi)
+    for angle in arrow_angles:
+        direction = angle_to_vector(angle)
+        c = cm(0.5 + 0.5*direction.dot(DRIFT_DIRECTION))
+        plt.arrow(px, py, l * direction[0], l * direction[1], color=c,
+                  width = 0.2)
+    # plt.arrow(px, py, -l * DRIFT_DIRECTION[0], -l * DRIFT_DIRECTION[1], color=cm(0.),
+    #           width = 0.2)
+
+    c0 = plt.Circle((px, py), 0.1*l, facecolor='w', edgecolor='k')
+    c1 = plt.Circle((px, py), 1.2*l, facecolor=(0,0,0,0), edgecolor='k')
+    plt.gca().add_artist(c0)
+    plt.gca().add_artist(c1)
 
     plt.gca().set_xlim(XLIM)
     plt.gca().set_ylim(YLIM)
     plt.axis('off')
-    plt.tight_layout()
+    plt.tight_layout(pad=0.)
     plt.show()
 
-    # # ax = plot_eary_late_drift(tree)
-    # ax = plot_global_local_drift(tree)
+    # ax = plot_eary_late_drift(tree)
+    # # ax = plot_global_local_drift(tree)
     #
     # ax.set_rticks([])
     # ax.grid(False)
-    # plt.tight_layout()
+    # plt.tight_layout(pad=0)
     # plt.legend()
     # plt.show()

@@ -29,19 +29,19 @@ def run_experiments(custom_params):
     TREE_PATH = os.path.join(BASE_DIRECTORY, 'nowhere.tree')
 
     logging.basicConfig(filename=BASE_DIRECTORY+'migration.log',
-                        level=logging.DEBUG)
+                        level=logging.DEBUG, filemode='w')
     logging.getLogger().addHandler(logging.StreamHandler())
 
     params = {
-        'N_RUNS': 10,
-        'N_STEPS': 100,
-        'N_FEATURES': 50,
+        'N_RUNS': 40,
+        'N_STEPS': 30,
+        'N_FEATURES': 5,
         'RATE_OF_CHANGE': 0.1,
         'TOTAL_DRIFT': 1.,
         'TOTAL_DIFFUSION': 1.,
         'DRIFT_DENSITY': 1.,
         'DRIFT_DIRECTION': normalize([0.1, -0.1]),
-        'P_SPLIT': .5,
+        'P_SPLIT': 1.,
         'CHAIN_LENGTH': 100000,
         'BURNIN': 50000,
         'HPD': 90,
@@ -98,7 +98,8 @@ def run_experiments(custom_params):
         'hpd_coverage': coverage,
         'hits': okcools,
         'params': params
-    }.update(custom_params)
+    }
+    res.update(custom_params)
 
     logging.info('Successes: %i', okcools)
     logging.info('Probability coverage (%i hpd): %.4f', HPD, coverage)
@@ -115,8 +116,8 @@ if __name__ == '__main__':
     logging.info('\n##############################  NEW EXPERIMENT ##############################')
 
     param_map = {
-        'TOTAL_DRIFT': [0., 0.25, 0.5, 1.0, 1.25, 1.5],
-        'DRIFT_DENSITY': [0.1, 0.5, 1.]
+        'TOTAL_DRIFT': [0.5, 1.0, 1.5],
+        'DRIFT_DENSITY': [0.05, 1.]
     }
 
     param_names, param_values = zip(*param_map.items())
@@ -127,9 +128,16 @@ if __name__ == '__main__':
     results_list = Parallel(n_jobs=3)(
         run(named_params) for named_params in named_param_grid
     )
-
+    print(results_list)
     results = {named_params: res
                for named_params, res in zip(named_param_grid, results_list)}
+    print(results)
 
-    with open('results/migration/results.pkl', 'wb') as res_file:
+    now = datetime.datetime.now()
+    with open('results/migration/%s.pkl' % now, 'wb') as res_file:
         pickle.dump(results, res_file)
+
+    print()
+    print()
+    for named_params, v in results.items():
+        print(named_params, '\t ...  ', v['hpd_coverage'])

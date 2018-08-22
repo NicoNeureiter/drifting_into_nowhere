@@ -33,7 +33,7 @@ OUTGROUP_NAMES = [
 ]
 
 
-def write_bantu_xml(bantu_xml_path, chain_length, fix_root=False, exclude_outgroup=False):
+def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False):
     with open(XML_TEMPLATE_PATH, 'r') as xml_template_file:
         xml_template = xml_template_file.read()
     with open(NEWICK_TREE_PATH, 'r') as tree_file:
@@ -43,7 +43,7 @@ def write_bantu_xml(bantu_xml_path, chain_length, fix_root=False, exclude_outgro
         tree = Node.from_newick(tree_str.strip())
         print(tree.tree_size)
         tree.remove_nodes_by_name(OUTGROUP_NAMES)
-        tree_str = tree.to_newick()
+        tree_str = tree.to_newick(write_attributes=False)
         print(tree.tree_size)
 
     locations, _ = read_locations_file(LOCATIONS_PATH)
@@ -57,13 +57,13 @@ def write_bantu_xml(bantu_xml_path, chain_length, fix_root=False, exclude_outgro
         locations_xml += LOCATION_TEMPLATE.format(id=name, x=loc[0], y=loc[1])
         features_xml += FEATURES_TEMPLATE.format(id=name, features='0')
 
-    root = BANTU_ROOT
-    if fix_root:
-        root_precision = 1e8
-    else:
+    if root is None:
+        root = [0., 0.]
         root_precision = 1e-8
+    else:
+        root_precision = 1e8
 
-    with open(bantu_xml_path, 'w') as beast_xml_file:
+    with open(xml_path, 'w') as beast_xml_file:
         beast_xml_file.write(
             xml_template.format(
                 locations=locations_xml,
@@ -89,8 +89,8 @@ if __name__ == '__main__':
     from src.evaluation import check_root_in_hpd
     # from src.plotting import plot_walk
 
-    CHAIN_LENGTH = 100000
-    BURNIN = 5000
+    CHAIN_LENGTH = 200000
+    BURNIN = 20000
     HPD = 80
 
     SCRIPT_PATH = 'src/beast_pipeline.sh'
@@ -98,7 +98,8 @@ if __name__ == '__main__':
     GEOJSON_PATH = 'africa.geojson'
     GEO_TREE_PATH = 'data/bantu/nowhere.tree'
 
-    write_bantu_xml(BANTU_XML_PATH, CHAIN_LENGTH, fix_root=False, exclude_outgroup=True)
+    root = BANTU_ROOT
+    write_bantu_xml(BANTU_XML_PATH, CHAIN_LENGTH, root=None, exclude_outgroup=False)
 
     # Run the BEAST analysis + summary of results (treeannotator)
     os.system('bash {script} {hpd} {burnin} {cwd} {geojson}'.format(

@@ -177,8 +177,7 @@
 	<matrixInverse id="location.varCovar">
 		<matrixParameter idref="location.precision"/>
 	</matrixInverse>
-	<!--<continuousDiffusionStatistic id="location.diffusionRate">-->
-	<continuousDiffusionStatistic id="location.diffusionRate" greatCircleDistance="true">
+	<continuousDiffusionStatistic id="location.diffusionRate"{spherical}>
 		<multivariateTraitLikelihood idref="location.traitLikelihood"/>
 	</continuousDiffusionStatistic>
 
@@ -193,10 +192,10 @@
 		</deltaExchange>
 -->
 
-		<scaleOperator scaleFactor="0.85" weight="5">
+		<scaleOperator scaleFactor="0.9" weight="5">
 			<parameter idref="location.stdev"/>
 		</scaleOperator>
-		<swapOperator size="1" weight="30" autoOptimize="false">
+		<swapOperator size="1" weight="20" autoOptimize="false">
 			<parameter idref="location.rrwCategories"/>
 		</swapOperator>
 		<uniformIntegerOperator weight="10">

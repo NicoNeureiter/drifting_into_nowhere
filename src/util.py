@@ -35,21 +35,25 @@ def newick_tree(state):
         return '%s:%.1f' % (state.name, state.length)
 
 
-def read_locations_file(locations_path, delimiter='\t'):
+def read_locations_file(locations_path, delimiter='\t', swap_xy=False,
+                        skip_first_row=True):
     locations = {}
     location_missing = []
 
     with open(locations_path, 'r') as loc_file:
         loc_reader = csv.reader(loc_file, delimiter=delimiter)
-        # skip header row
-        next(loc_reader)
+
+        if skip_first_row:
+            next(loc_reader)
 
         # Read file
         for line in loc_reader:
             name = line[0]
             try:
-                lat = float(line[1])
-                long = float(line[2])
+                x = float(line[1])
+                y = float(line[2])
+                if swap_xy:
+                    x, y = y, x
             except ValueError:
                 logging.warning('No location provided for society: %s' % name)
                 location_missing.append(name)
@@ -57,9 +61,26 @@ def read_locations_file(locations_path, delimiter='\t'):
 
             # TODO project here ?
 
-            locations[name] = np.array([lat, long])
+            locations[name] = np.array([x, y])
 
     return locations, location_missing
+
+
+def read_alignment_file(alignment_path, delimiter='\t', skip_first_row=True):
+    sequences = {}
+
+    with open(alignment_path, 'r') as loc_file:
+        alignment_reader = csv.reader(loc_file, delimiter=delimiter)
+
+        if skip_first_row:
+            next(alignment_reader)
+
+        # Read file
+        for line in alignment_reader:
+            name, seq = line
+            sequences[name] = seq
+
+    return sequences
 
 
 def remove_whitespace(s):
@@ -100,3 +121,34 @@ def bernoulli(p, size=None):
 
 def grey(v):
     return (v, v, v)
+
+
+def total_drift_2_step_drift(total_drift, n_steps, drift_density=1.):
+    return total_drift / (n_steps * drift_density)
+
+
+def total_diffusion_2_step_var(total_diffusion, n_steps):
+    return total_diffusion ** 2 / n_steps
+
+
+class StringTemplate(object):
+
+    def __init__(self, template_string):
+        super(StringTemplate, self).__setattr__('template_string', template_string)
+        super(StringTemplate, self).__setattr__('format_dict', {})
+
+    def __setattr__(self, key, value):
+        # super(StringTemplate, self).__setattr__(key, value)
+        self.set_value(key, value)
+
+    def set_value(self, key, value):
+        self.format_dict[key] = value
+
+    def set_values(self, **fill_values):
+        self.format_dict.update(fill_values)
+
+    def fill(self):
+        return self.template_string.format(**self.format_dict)
+
+    def __str__(self):
+        return self.fill()

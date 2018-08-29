@@ -2,10 +2,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
+import logging
 
 import numpy as np
 
-from src.util import remove_whitespace, find
+from src.util import (remove_whitespace, find, read_locations_file,
+                      read_alignment_file, StringTemplate)
+from src.beast_xml_templates import *
 
 
 class Node(object):
@@ -29,6 +32,7 @@ class Node(object):
         self.parent = parent
         self.attributes = {} or attributes
         self._location = location
+        self.alignment = '0'  # TODO
 
         for child in children:
             child.parent = self
@@ -54,6 +58,17 @@ class Node(object):
             size += c.tree_size
         return size
 
+    @property
+    def n_leafs(self):
+        size = 1 if self.is_leaf else 0
+        for c in self.children:
+            size += c.n_leafs
+        return size
+
+    @property
+    def is_leaf(self):
+        return len(self.children) == 0
+
     def add_child(self, child):
         self.children.append(child)
         child.parent = self
@@ -69,7 +84,7 @@ class Node(object):
             child.set_location_attribute(location_attribute)
 
     @staticmethod
-    def from_newick(newick, location_key='location'):
+    def from_newick(newick, location_key='location', swap_xy=False):
         """Create a tree from the Newick representation.
 
         Args:
@@ -79,7 +94,7 @@ class Node(object):
             Node: The parsed tree.
         """
         newick = remove_whitespace(newick)
-        node, _ = parse_node(newick, location_key=location_key)
+        node, _ = parse_node(newick, location_key=location_key, swap_xy=swap_xy)
         return node
 
     def get_location(self, location_key='location'):
@@ -87,25 +102,23 @@ class Node(object):
         location_median_key = location_key + '_median'
 
         if (location_key % 1) in self.attributes:
-            x = self[location_key % 2]
-            y = self[location_key % 1]
+            x = self[location_key % 1]
+            y = self[location_key % 2]
         elif (location_median_key % 1) in self.attributes:
-            x = self[location_median_key % 2]
-            y = self[location_median_key % 1]
+            x = self[location_median_key % 1]
+            y = self[location_median_key % 2]
         else:
-            print(location_key % 1)
-            print(self.attributes)
-            raise ValueError
+            return None
+            # print(location_key)
+            # print(self.attributes)
+            # raise ValueError
 
         return np.array([x, y])
 
-    def get_edges(self):
-        edges = []
+    def iter_edges(self):
         for c in self.children:
-            edges.append((self, c))
-            edges += c.get_edges()
-
-        return edges
+            yield self, c
+            yield from c.iter_edges()
 
     def remove_nodes_by_name(self, names):
         was_leaf = (len(self.children) == 0)
@@ -155,16 +168,100 @@ class Node(object):
 
         return '{core}{attrs}:{len}'.format(core=core, attrs=attr_str, len=self.length)
 
-    def copy_other_node(self, other):
+    def copy_other_node(self, other: 'Node'):
         self.name = other.name
         self.length = other.length
         self.parent = other.parent
         self.attributes = other.attributes
-        self.location_attribute = other.location_attribute
+        self.alignment = other.alignment
+        self._location = other._location
 
         self.children = []
         for c in other.children:
             self.add_child(c)
+
+    def _format_location(self):
+        x, y = self.location
+        return LOCATION_TEMPLATE.format(id=self.name, x=x, y=y)
+
+    def _format_alignment(self):
+        return FEATURES_TEMPLATE.format(id=self.name, features=self.alignment)
+
+    def _format_tree_locations(self):
+        return ''.join(map(Node._format_location, self.iter_leafs()))
+
+    def _format_tree_alignments(self):
+        return ''.join(map(Node._format_alignment, self.iter_leafs()))
+
+    def write_beast_xml(self, output_path, chain_length, root=None, movement_model='rrw',
+                        diffusion_on_a_sphere=False, jitter=0.01):
+        if movement_model == 'rrw':
+            template_path = RRW_XML_TEMPLATE_PATH
+        elif movement_model == 'brownian':
+            template_path = BROWNIAN_XML_TEMPLATE_PATH
+        else:
+            raise ValueError
+
+        with open(template_path, 'r') as xml_template_file:
+            xml_template = StringTemplate(xml_template_file.read())
+
+        # Write newick tree
+        newick_str = self.to_newick(write_attributes=False)
+        xml_template.tree = newick_str
+
+        # Set locations and features
+        xml_template.locations = self._format_tree_locations()
+        xml_template.features = self._format_tree_alignments()
+
+        # Fix root / don't fix root by setting set steep / flat prior
+        if root is None:
+            root = [0., 0.]
+            root_precision = 1e-8
+        else:
+            root_precision = 1e8
+
+        xml_template.root_x = root[0]
+        xml_template.root_y = root[1]
+        xml_template.root_precision = root_precision
+
+        # Set parameters
+        xml_template.chain_length = chain_length
+        xml_template.ntax = self.n_leafs
+        xml_template.nchar = len(self.alignment)
+        xml_template.jitter = jitter
+        xml_template.spherical = SPHERICAL if diffusion_on_a_sphere else ''
+
+        with open(output_path, 'w') as beast_xml_file:
+            beast_xml_file.write(
+                xml_template.fill()
+            )
+
+    def load_locations_from_csv(self, csv_path, swap_xy=False):
+        locations, _ = read_locations_file(csv_path, swap_xy=swap_xy)
+        for node in self.iter_descendants():
+            if node.name in locations:
+                node._location = locations[node.name]
+            # else:
+            #     logging.warning('No location found for node "%s"' % node.name)
+
+    def load_alignment_from_csv(self, csv_path):
+        alignments = read_alignment_file(csv_path)
+        for node in self.iter_descendants():
+            if node.name in alignments:
+                node.alignment = alignments[node.name]
+            else:
+                logging.warning('No alignment found for node "%s"' % node.name)
+
+    def iter_descendants(self):
+        yield self
+        for c in self.children:
+            yield from c.iter_descendants()
+
+    def iter_leafs(self):
+        if self.is_leaf:
+            yield self
+        for c in self.children:
+            yield from c.iter_leafs()
 
     def __getitem__(self, key):
         return self.attributes[key]
@@ -173,7 +270,7 @@ class Node(object):
         return 'node_' + self.name
 
 
-def parse_node(s, location_key='location'):
+def parse_node(s, location_key='location', swap_xy=False):
     """Parse a string in Newick format into a Node object. The Newick string
     might be partially parsed already, i.e. a suffix of a full Newick tree.
 
@@ -192,7 +289,7 @@ def parse_node(s, location_key='location'):
         # Parse children
         while s.startswith('(') or s.startswith(','):
             s = s[1:]
-            child, s = parse_node(s, location_key=location_key)
+            child, s = parse_node(s, location_key=location_key, swap_xy=swap_xy)
             children.append(child)
 
         assert s.startswith(')'), '"%s"' % s
@@ -209,7 +306,11 @@ def parse_node(s, location_key='location'):
     length, s = parse_length(s)
 
     node = Node(length, name=name, children=children, attributes=attributes)
+
     node._location = node.get_location(location_key)
+    if swap_xy:
+        node._location = node._location[::-1]
+
     return node, s
 
 

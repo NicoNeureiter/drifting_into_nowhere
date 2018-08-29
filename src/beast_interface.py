@@ -55,7 +55,7 @@ def write_locations(simulation, path):
 
 
 def write_beast_xml(simulation, path, chain_length, fix_root=False):
-    with open(XML_TEMPLATE_PATH, 'r') as xml_template_file:
+    with open(RRW_XML_TEMPLATE_PATH, 'r') as xml_template_file:
         xml_template = xml_template_file.read()
 
     locations_xml = ''
@@ -99,7 +99,8 @@ def write_beast_xml(simulation, path, chain_length, fix_root=False):
                 chain_length=chain_length,
                 ntax=simulation.n_sites,
                 nchar=simulation.n_features,
-                jitter=0.
+                jitter=0.,
+                spherical=''
             )
         )
 

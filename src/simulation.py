@@ -5,9 +5,10 @@ from __future__ import absolute_import, division, print_function, \
 
 import numpy as np
 from numpy.random import multivariate_normal as gaussian
+import matplotlib.pyplot as plt
 
 from src.tree import Node
-from src.util import newick_tree, bernoulli
+from src.util import newick_tree, bernoulli, norm, normalize
 
 
 class GeoState(object):
@@ -36,7 +37,6 @@ class GeoState(object):
         else:
             # TODO do this elegantly
             step_cov = step_cov * np.eye(2)
-
 
         self.location = self.location + gaussian(step_mean, step_cov)
         self.location_history.append(self.location)
@@ -110,6 +110,21 @@ class State(Node):
         self.length = length
 
     @property
+    def location(self):
+        return self.geoState.location
+
+    @property
+    def alignment(self):
+        return self.featureState.features
+
+    @property
+    def height(self):
+        if self.parent is None:
+            return 0.
+        else:
+            return self.parent.height + self.parent.length
+
+    @property
     def name(self):
         """Appends a prefix to the state code, depending on whether it is a
         historical or a present society.
@@ -148,19 +163,32 @@ class State(Node):
 
         return child
 
+    def plot_walk(self):
+        if self.parent is not None:
+            x, y = self.location_history[-self.length-1:].T
+            print(x, y)
+            plt.plot(x, y, c='grey', lw=0.5)
+
+        for c in self.children:
+            c.plot_walk()
+
+
     def __repr__(self):
         return self.name
+
 
 class Simulation(object):
 
     def __init__(self, n_features, rate, step_mean, step_variance, p_split,
-                 drift_frequency=1.):
+                 drift_frequency=1., repulsive_force=0.):
         self.n_features = n_features
 
         self.step_mean = np.asarray([10.0, .0])
+        self.step_variance = step_variance
         self.step_cov = step_variance * np.eye(2)
         self.p_split = p_split
         self.drift_frequency = drift_frequency
+        self.repulsive_force = repulsive_force
 
         start_features = np.zeros(n_features, dtype=bool)
         start_location = np.zeros(2)
@@ -192,6 +220,28 @@ class Simulation(object):
 
         for i, society in enumerate(self.societies):
             society.step()
+
+        if self.repulsive_force > 0.:
+            P = self.get_locations()
+            deltas = P - P[:, None]
+            dists = np.hypot(*deltas.T)
+            directions = deltas / dists[:, :, None]
+            # dists = np.maximum(dists, 1.)
+            # repel = self.repulsive_force * deltas / (dists ** 2.)[:, :, None]
+            repel = self.repulsive_force * directions * np.exp(-0.5 * dists ** 2. / self.step_variance)[:, :, None]
+            np.fill_diagonal(repel[:, :, 0], 0.)
+            np.fill_diagonal(repel[:, :, 1], 0.)
+            repel_sum = np.sum(repel, axis=0)
+            # import matplotlib.pyplot as plt
+            # plt.scatter(*P.T)
+            for i_s, s in enumerate(self.societies):
+                # print(repel_sum)
+                # plt.arrow(*s.geoState.location, *repel_sum[i_s], width=0.01, length_includes_head=True, lw=0, color='k')
+                s.geoState.location += repel_sum[i_s]
+            # plt.axis('equal')
+            # plt.margins(1.)
+            # plt.show()
+
 
     def split(self, i):
         society = self.societies[i]
@@ -235,3 +285,14 @@ class Simulation(object):
 
     def get_feature_history(self):
         return np.array([s.feature_history for s in self.societies]).swapaxes(0, 1)
+
+
+class SimulationBackbone(Simulation):
+
+    def run(self, n_steps):
+        self.history = [self.root]
+        self.societies = [self.root.create_child(),
+                          self.root.create_child()]
+
+        for i in range(n_steps):
+            self.step()

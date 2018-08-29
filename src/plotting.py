@@ -6,6 +6,8 @@ import math as _math
 
 import numpy as np
 from matplotlib import pyplot as plt, animation as animation
+from scipy import signal
+from scipy.stats import norm as normal
 
 from src.util import bounding_box
 
@@ -31,15 +33,15 @@ def plot_walk(simulation, show_path=True, show_tree=False, ax=None,
 
     if show_path:
         for i in range(simulation.n_sites):
-            # w = signal.hann(10)**8.
-            # walk[:-1, i, 0] = signal.convolve(
-            #     np.pad(walk[:, i, 0], (4, 4), 'edge'), w, mode='same')[4:-5] / sum(w)
-            # walk[:-1, i, 1] = signal.convolve(
-            #     np.pad(walk[:, i, 1], (4, 4), 'edge'), w, mode='same')[4:-5] / sum(w)
-            plt.plot(*walk[:, i].T, color='grey', lw=0.2)
+            w = signal.hann(10)**8.
+            walk[:-1, i, 0] = signal.convolve(
+                np.pad(walk[:, i, 0], (4, 4), 'edge'), w, mode='same')[4:-5] / sum(w)
+            walk[:-1, i, 1] = signal.convolve(
+                np.pad(walk[:, i, 1], (4, 4), 'edge'), w, mode='same')[4:-5] / sum(w)
+            plt.plot(*walk[:, i].T, color='lightgrey', lw=0.75)
 
-    ax.scatter(*walk[0, 0], color='teal', lw=0)
-    ax.scatter(*walk[-1, :, :].T, color='darkred', s=4, lw=0)
+    # ax.scatter(*walk[0, 0], color='teal', lw=0)
+    ax.scatter(*walk[-1, :, :].T, color='orange', s=30, lw=0)
 
     if show_tree:
         plot_tree(simulation.root, alpha=alpha)
@@ -154,3 +156,14 @@ def circular_histogram(x, bins=50, range=(0, TAU), weights=None, ax=None, label=
     ax.set_ylim(0, ylim)
 
     return ax
+
+
+def plot_rrw_step_pdf(lognormal_mean=1., exp_lambda=0.333, n_samples=2000):
+    lognormal_stdev = np.random.exponential(exp_lambda, size=n_samples)
+    normal_stdev = np.random.lognormal(lognormal_mean, lognormal_stdev)
+    def step_pdf(x):
+        return np.mean(normal.pdf(x[:, None], scale=normal_stdev[None, :]), axis=1)
+
+    x = np.linspace(-10., 10., 1000)
+    plt.plot(x, step_pdf(x))
+    plt.show()

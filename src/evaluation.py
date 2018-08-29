@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 from shapely.geometry import Point, Polygon
 
 
-def check_root_in_hpd(tree_file_path, hpd, root, ax=None, alpha=0.2):
+def check_root_in_hpd(tree_file_path, hpd, root, ax=None, alpha=0.15, color='teal', **plt_kwargs):
     hpd_regex = 'location[12]_{hpd}%HPD_[0-9]+={{[0-9,.\\-]+}}'.format(hpd=hpd)
     if not isinstance(root, Point):
         assert len(root) == 2
@@ -48,7 +48,7 @@ def check_root_in_hpd(tree_file_path, hpd, root, ax=None, alpha=0.2):
         a = Polygon(zip(xs, ys)).area
 
         if ax:
-            ax.fill(xs, ys, alpha=alpha, color='teal')
+            ax.fill(xs, ys, alpha=alpha, color=color, **plt_kwargs)
 
     # HPD covers root if any of the polygons covers it
     success = any(poly.contains(root) for poly in polygons)

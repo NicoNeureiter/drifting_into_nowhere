@@ -6,7 +6,8 @@ from __future__ import absolute_import, division, print_function, \
 
 # Paths to separate template files
 
-XML_TEMPLATE_PATH = 'data/templates/beast_xml_template.xml'
+RRW_XML_TEMPLATE_PATH = 'data/templates/beast_rrw_template.xml'
+BROWNIAN_XML_TEMPLATE_PATH = 'data/templates/beast_brownian_template.xml'
 LOCATION_TEMPLATE_PATH = 'data/templates/location_template.xml'
 
 
@@ -35,10 +36,15 @@ GEO_PRIOR = '''\
 		<data>
 			<parameter idref="{id}.location"/>
 		</data>
-	</flatGeoSpatialPrior>\
+	</flatGeoSpatialPrior>
 '''
+SPHERICAL = ' greatCircleDistance="true"'
 
+
+################################################################################
 # Nexus & locations csv templates
+################################################################################
+
 LOCATIONS_CSV_TEMPLATE = 'traits\tx\ty\n{data}'
 NEXUS_TEMPLATE = '''#NEXUS
 BEGIN DATA;
@@ -52,3 +58,12 @@ BEGIN TREES;
       TREE original_tree = {tree};
 END;
 '''
+
+
+################################################################################
+# Not used for now
+################################################################################
+
+FOSSILS = '\t<taxa id="{id}">\n{descendants}\n\t</taxa>\n'
+FOSSIL_CHILD = '\t\t<taxon idref="{id}"/>\n'
+

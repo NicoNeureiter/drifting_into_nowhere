@@ -6,8 +6,8 @@ import os
 
 import numpy as np
 
-from src.evaluation import check_root_in_hpd
 from src.tree import Node
+from src.util import mkpath
 
 
 NEWICK_TREE_PATH = 'data/bantu/bantu.nwk'
@@ -49,34 +49,34 @@ def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
 
 
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    from src.beast_interface import run_beast, run_treeannotator, load_tree_from_nexus
+    from src.plotting import plot_hpd, plot_root
+    from src.config import COLOR_ROOT_TRUE
 
-    CHAIN_LENGTH = 1000000
-    BURNIN = 20000
+    CHAIN_LENGTH = 2000000
+    BURNIN = 50000
     HPD = 80
 
-    BASE_DIR = 'data/bantu_brownian/'
+    WORKING_DIR = 'data/bantu_withoutgroup_2/'
     SCRIPT_PATH = 'src/beast_pipeline.sh'
-    BANTU_XML_PATH = BASE_DIR + 'nowhere.xml'
+    BANTU_XML_PATH = WORKING_DIR + 'nowhere.xml'
     GEOJSON_PATH = 'africa.geojson'
-    GEO_TREE_PATH = BASE_DIR + 'nowhere.tree'
+    GEO_TREE_PATH = WORKING_DIR + 'nowhere.tree'
+    mkpath(WORKING_DIR)
 
-    BANTU_ROOT = np.array([6.5, 10.5])
+    # BANTU_ROOT = np.array([6.5, 10.5])
+    BANTU_ROOT = np.array([10.5, 6.5])
 
-    os.makedirs(os.path.dirname(BASE_DIR), exist_ok=True)
-
-    root = BANTU_ROOT
     write_bantu_xml(BANTU_XML_PATH, CHAIN_LENGTH, root=None, exclude_outgroup=True,
-                    movement_model='brownian')
+                    movement_model='rrw')
+                    # movement_model='brownian')
 
-    # Run the BEAST analysis + summary of results (treeannotator)
-    os.system('bash {script} {hpd} {burnin} {cwd} {geojson}'.format(
-        script=SCRIPT_PATH,
-        hpd=HPD,
-        burnin=BURNIN,
-        cwd=os.path.join(os.getcwd(),BASE_DIR),
-        geojson=GEOJSON_PATH
-    ))
+    # Run the BEAST analysis
+    run_beast(WORKING_DIR)
+    run_treeannotator(HPD, BURNIN, WORKING_DIR)
 
     # Evaluate the results
-    okcool = check_root_in_hpd(GEO_TREE_PATH, HPD, root=BANTU_ROOT[::-1])
+    tree = load_tree_from_nexus(GEO_TREE_PATH)
+    okcool = tree.root_in_hpd(BANTU_ROOT, HPD)
     print('\n\nOk cool: %r' % okcool)

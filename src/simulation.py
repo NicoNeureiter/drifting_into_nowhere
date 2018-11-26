@@ -19,6 +19,7 @@ class GeoState(object):
         self.step_mean = np.asarray(step_mean)
         self.step_cov = np.asarray(step_cov)
         self.drift_frequency = drift_frequency
+        self.v = np.array([0., 0.])
 
         if location_history is None:
             self.location_history = [self.location]
@@ -35,10 +36,12 @@ class GeoState(object):
         if step_cov is None:
             step_cov = self.step_cov
         else:
-            # TODO do this elegantly
             step_cov = step_cov * np.eye(2)
 
-        self.location = self.location + gaussian(step_mean, step_cov)
+        step = gaussian(step_mean, step_cov)
+        # step = 0.9 * step + 0.1 * self.v
+        # self.v = step
+        self.location = self.location + step
         self.location_history.append(self.location)
 
     def __copy__(self):
@@ -58,23 +61,23 @@ class FeatureState(object):
     """
 
     def __init__(self, features, rate, feature_history=None):
-        self.features = np.asarray(features)
+        self.alignment = np.asarray(features)
         self.rate = rate
 
-        self.n_features = len(self.features)
+        self.n_features = len(self.alignment)
 
         if feature_history is None:
-            self.feature_history = [self.features]
+            self.feature_history = [self.alignment]
         else:
             self.feature_history = feature_history
 
     def step(self):
         step = bernoulli(p=self.rate, size=self.n_features)
-        self.features = np.logical_xor(self.features, step)
-        self.feature_history.append(self.features)
+        self.alignment = np.logical_xor(self.alignment, step)
+        self.feature_history.append(self.alignment)
 
     def __copy__(self):
-        return FeatureState(self.features.copy(), self.rate, self.feature_history.copy())
+        return FeatureState(self.alignment.copy(), self.rate, self.feature_history.copy())
 
     def copy(self):
         return self.__copy__()
@@ -97,32 +100,30 @@ class State(Node):
     """
 
     def __init__(self, features, location, rate, geo_step_mean, geo_step_cov,
-                 drift_frequency=1.,
-                 location_history=None, feature_history=None,
+                 drift_frequency=1., location_history=None, feature_history=None,
                  parent=None, children=None, name='', length=0):
         self.geoState = GeoState(location, geo_step_mean, geo_step_cov, location_history,
                                  drift_frequency=drift_frequency)
         self.featureState = FeatureState(features, rate, feature_history)
-
-        self.parent = parent
-        self.children = children or []
-        self._name = name
-        self.length = length
+        super(State, self).__init__(length=length, name=name, children=children,
+                                    parent=parent, location=location)
 
     @property
     def location(self):
         return self.geoState.location
 
-    @property
-    def alignment(self):
-        return self.featureState.features
+    @location.setter
+    def location(self, location):
+        self.geoState.location = location
 
     @property
-    def height(self):
-        if self.parent is None:
-            return 0.
-        else:
-            return self.parent.height + self.parent.length
+    def alignment(self):
+        return self.featureState.alignment
+
+    @alignment.setter
+    def alignment(self, alignment):
+        self.featureState.alignment = np.asarray(alignment)
+
 
     @property
     def name(self):
@@ -137,6 +138,10 @@ class State(Node):
         else:
             return 'society_' + self._name
 
+    @name.setter
+    def name(self, name):
+        self._name = name
+
     @property
     def location_history(self):
         return np.asarray(self.geoState.location_history)
@@ -146,7 +151,7 @@ class State(Node):
         return np.asarray(self.featureState.feature_history)
 
     def step(self, step_mean=None, step_cov=None):
-        self.featureState.step()
+        # self.featureState.step()
         self.geoState.step(step_mean, step_cov)
         self.length += 1
 
@@ -155,7 +160,7 @@ class State(Node):
         gs = self.geoState.copy()
 
         i = str(len(self.children))
-        child = State(fs.features, gs.location, fs.rate, gs.step_mean, gs.step_cov,
+        child = State(fs.alignment, gs.location, fs.rate, gs.step_mean, gs.step_cov,
                       location_history=gs.location_history, feature_history=fs.feature_history,
                       parent=self, name=self._name+i, drift_frequency=gs.drift_frequency)
 
@@ -183,7 +188,7 @@ class Simulation(object):
                  drift_frequency=1., repulsive_force=0.):
         self.n_features = n_features
 
-        self.step_mean = np.asarray([10.0, .0])
+        self.step_mean = step_mean
         self.step_variance = step_variance
         self.step_cov = step_variance * np.eye(2)
         self.p_split = p_split
@@ -197,6 +202,8 @@ class Simulation(object):
         self.history = []
         self.societies = []
 
+        self.i_step = 0
+
     @property
     def n_sites(self):
         return len(self.societies)
@@ -206,11 +213,13 @@ class Simulation(object):
         return len(self.history)
 
     def run(self, n_steps):
-        self.history = [self.root]
-        self.societies = [self.root.create_child(),
-                          self.root.create_child()]
+        self.history = []
+        self.societies = [self.root]
+        self.split(0)
+        # self.societies = [self.root.create_child(),
+        #                   self.root.create_child()]
 
-        for i in range(n_steps):
+        for self.i_step in range(n_steps):
             self.step()
 
     def step(self):
@@ -222,26 +231,40 @@ class Simulation(object):
             society.step()
 
         if self.repulsive_force > 0.:
-            P = self.get_locations()
-            deltas = P - P[:, None]
-            dists = np.hypot(*deltas.T)
-            directions = deltas / dists[:, :, None]
-            # dists = np.maximum(dists, 1.)
-            # repel = self.repulsive_force * deltas / (dists ** 2.)[:, :, None]
-            repel = self.repulsive_force * directions * np.exp(-0.5 * dists ** 2. / self.step_variance)[:, :, None]
-            np.fill_diagonal(repel[:, :, 0], 0.)
-            np.fill_diagonal(repel[:, :, 1], 0.)
-            repel_sum = np.sum(repel, axis=0)
-            # import matplotlib.pyplot as plt
-            # plt.scatter(*P.T)
-            for i_s, s in enumerate(self.societies):
-                # print(repel_sum)
-                # plt.arrow(*s.geoState.location, *repel_sum[i_s], width=0.01, length_includes_head=True, lw=0, color='k')
-                s.geoState.location += repel_sum[i_s]
-            # plt.axis('equal')
-            # plt.margins(1.)
-            # plt.show()
+            self.repel()
 
+    def repel(self):
+        P = self.get_locations()
+        deltas = P - P[:, None]
+        dists = np.hypot(*deltas.T)
+        directions = deltas / dists[:, :, None]
+
+        # Compute repulsive force between every pair of particles
+        repel = self.repulsive_force * self.step_variance * directions / (1 + 1. * dists)[:, :, None]
+        # repel = self.repulsive_force * directions * np.exp(-0.5 * dists ** 2. / self.step_variance)[:, :, None]
+
+        # Don't repel yourself
+        np.fill_diagonal(repel[:, :, 0], 0.)
+        np.fill_diagonal(repel[:, :, 1], 0.)
+
+        # Sum up repelling forces to get total force on every particle
+        repel_sum = np.sum(repel, axis=0)
+
+        # Apply repelling force to positions
+        for i_s, s in enumerate(self.societies):
+            s.geoState.location += repel_sum[i_s]
+
+    def contact(self, contact_dist=0.5, p=0.1):
+        # Compute distances (for strength of contact)
+        P = self.get_locations()
+        deltas = P - P[:, None]
+        dists = np.hypot(*deltas.T)
+
+        # contact_possible = (dists < contact_dist)
+        p_contact = p ** dists
+        contact = np.random.random(dists.shape) < p_contact
+        X = self.get_features()
+        # X[contact] = X[contact.T]
 
     def split(self, i):
         society = self.societies[i]
@@ -289,10 +312,22 @@ class Simulation(object):
 
 class SimulationBackbone(Simulation):
 
-    def run(self, n_steps):
-        self.history = [self.root]
-        self.societies = [self.root.create_child(),
-                          self.root.create_child()]
+    def __init__(self, *args, backbone_steps=np.inf, **kwargs):
+        super(SimulationBackbone, self).__init__(*args, **kwargs)
+        self.backbone_steps = backbone_steps
 
-        for i in range(n_steps):
-            self.step()
+    def split(self, i):
+        society = self.societies[i]
+
+        self.history.append(society)
+
+        c1 = society.create_child()
+        c2 = society.create_child()
+        if self.i_step > self.backbone_steps:
+            c1.geoState.step_mean = np.zeros(2)
+            c2.geoState.step_mean = np.zeros(2)
+        elif bernoulli(0.15):
+            c1.geoState.step_mean = np.zeros(2)
+
+        self.societies[i] = c1
+        self.societies.append(c2)

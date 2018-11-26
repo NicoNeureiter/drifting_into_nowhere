@@ -34,14 +34,10 @@
 		</populationSize>
 	</constantSize>
 
-	<!-- Construct a starting tree that is compatible with specified clade heights-->
-	<rescaledTree id="startingTree">
-
-		<!-- The user-specified starting tree in a newick tree format.               -->
-		<newick usingDates="false">
-			{tree};
-		</newick>
-	</rescaledTree>
+	<!-- The user-specified starting tree in a newick tree format.               -->
+	<newick id="startingTree" usingDates="true">
+		{tree};
+	</newick>
 
 	<!-- Generate a tree model                                                   -->
 	<treeModel id="treeModel">

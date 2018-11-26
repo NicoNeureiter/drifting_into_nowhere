@@ -34,14 +34,10 @@
 		</populationSize>
 	</constantSize>
 
-	<!-- Construct a starting tree that is compatible with specified clade heights-->
-	<rescaledTree id="startingTree">
-
-		<!-- The user-specified starting tree in a newick tree format.               -->
-		<newick usingDates="false">
-			{tree};
-		</newick>
-	</rescaledTree>
+	<!-- The user-specified starting tree in a newick tree format.               -->
+	<newick id="startingTree" usingDates="true">
+		{tree};
+	</newick>
 
 	<!-- Generate a tree model                                                   -->
 	<treeModel id="treeModel">
@@ -263,7 +259,7 @@
 		</log>
 
 		<!-- write log to file                                                       -->
-		<log id="fileLog" logEvery="500" fileName="nowhere.log" overwrite="true">
+		<log id="fileLog" logEvery="1000" fileName="nowhere.log" overwrite="true">
 			<posterior idref="posterior"/>
 			<prior idref="prior"/>
 			<likelihood idref="likelihood"/>
@@ -292,7 +288,7 @@
 		</log>
 
 		<!-- write tree log to file                                                  -->
-		<logTree id="treeFileLog" logEvery="100" nexusFormat="true" fileName="nowhere.trees" sortTranslationTable="true">
+		<logTree id="treeFileLog" logEvery="1000" nexusFormat="true" fileName="nowhere.trees" sortTranslationTable="true">
 			<treeModel idref="treeModel"/>
 			<trait name="rate" tag="rate">
 				<strictClockBranchRates idref="branchRates"/>

@@ -1,12 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, \
-    unicode_literals
-
-import numpy as np
+from __future__ import absolute_import, division, print_function, unicode_literals
+import os
+import subprocess
+import logging
 
 from src.beast_xml_templates import *
+from src.tree import Node
+from src.util import str_concat_array, extract_newick_from_nexus, SubprocessException
 
+BEAST_LOGGER_PATH = 'logs/beast.log'
+beast_logger = logging.getLogger('beast')
+beast_logger.setLevel(logging.DEBUG)
+beast_logger.addHandler(logging.FileHandler(BEAST_LOGGER_PATH))
+
+beast_logger.info('='*100)
+beast_logger.info('New Run')
+beast_logger.info('='*100)
 
 def write_nexus(simulation, path, fossils=None):
     data_str = ''
@@ -15,7 +25,7 @@ def write_nexus(simulation, path, fossils=None):
         name = state.name
         fs = state.featureState.features.astype(int)
 
-        line = '\t\t' + name + '\t' + ''.join(map(str, fs)) + '\n'
+        line = '\t\t' + name + '\t' + str_concat_array(fs) + '\n'
         data_str += line
 
     # for i, state in enumerate(simulation.history):
@@ -54,8 +64,15 @@ def write_locations(simulation, path):
         locations_file.write(locations_str)
 
 
-def write_beast_xml(simulation, path, chain_length, fix_root=False):
-    with open(RRW_XML_TEMPLATE_PATH, 'r') as xml_template_file:
+def write_beast_xml(simulation, path, chain_length, fix_root=False, model='rrw'):
+    if model == 'rrw':
+        BEAST_XML_TEMPLATE = RRW_XML_TEMPLATE_PATH
+    elif model == 'brownian':
+        BEAST_XML_TEMPLATE = BROWNIAN_XML_TEMPLATE_PATH
+    else:
+        raise ValueError
+
+    with open(BEAST_XML_TEMPLATE, 'r') as xml_template_file:
         xml_template = xml_template_file.read()
 
     locations_xml = ''
@@ -67,8 +84,8 @@ def write_beast_xml(simulation, path, chain_length, fix_root=False):
         loc = state.geoState.location
         locations_xml += LOCATION_TEMPLATE.format(id=name, x=loc[0], y=loc[1])
 
-        fs = state.featureState.features.astype(int)
-        fs_str = ''.join(map(str, fs))
+        fs = state.featureState.alignment.astype(int)
+        fs_str = str_concat_array(fs)
         features_xml += FEATURES_TEMPLATE.format(id=name, features=fs_str)
 
     for i, state in enumerate(simulation.history):
@@ -105,17 +122,46 @@ def write_beast_xml(simulation, path, chain_length, fix_root=False):
         )
 
 
-class Beast(object):
+def load_tree_from_nexus(tree_path, location_key='location'):
+    with open(tree_path, 'r') as tree_file:
+        nexus_str = tree_file.read()
+        newick_str = extract_newick_from_nexus(nexus_str)
+        tree = Node.from_newick(newick_str, location_key=location_key)
 
-    def __init__(self):
-        pass
+    return tree
 
-    def set_locations(self, locations):
-        """Define the locations of tips (and evlt. taxa) to used in BEAST.
 
-        Args:
-            locations (dict[str, np.array]):
+def run_beast(working_dir):
+    script_path = 'src/beast_scripts/beast.sh'
+    working_dir = os.path.abspath(working_dir)
 
-        Returns:
+    bash_command = 'bash {script} {cwd}'.format(
+        script=script_path, cwd=working_dir)
 
-        """
+    ret = subprocess.run(bash_command, shell=True, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    beast_logger.info(ret.stdout)
+    beast_logger.info(ret.stderr)
+    if ret.returncode != 0:
+        raise SubprocessException
+
+
+def run_treeannotator(hpd, burnin, working_dir):
+    """Run treeannotator from the BEAST toolbox via bash script. Return the
+    summary tree."""
+
+    script_path = 'src/beast_scripts/treeannotator.sh'
+    working_dir = os.path.abspath(working_dir)
+    tree_path = os.path.join(working_dir, 'nowhere.tree')
+
+    bash_command = 'bash {script} {hpd} {burnin} {cwd}'.format(
+        script=script_path, hpd=hpd, burnin=burnin, cwd=working_dir)
+
+    ret = subprocess.run(bash_command, shell=True, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    beast_logger.info(ret.stdout)
+    beast_logger.info(ret.stderr)
+    if ret.returncode != 0:
+        raise SubprocessException
+
+    return load_tree_from_nexus(tree_path=tree_path)

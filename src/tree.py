@@ -7,8 +7,9 @@ import logging
 import numpy as np
 
 from src.util import (remove_whitespace, find, read_locations_file,
-                      read_alignment_file, StringTemplate)
+                      read_alignment_file, StringTemplate, str_concat_array)
 from src.beast_xml_templates import *
+from shapely.geometry import Point, Polygon
 
 
 class Node(object):
@@ -25,16 +26,17 @@ class Node(object):
     """
 
     def __init__(self, length, name='', children=None, parent=None,
-                 attributes=None, location=None):
+                 attributes=None, location=None, alignment=None):
         self.length = length
         self.name = name
-        self.children = [] or children
-        self.parent = parent
-        self.attributes = {} or attributes
-        self._location = location
-        self.alignment = '0'  # TODO
+        self.children = children or []
 
-        for child in children:
+        self.parent = parent
+        self.attributes = attributes or {}
+        self.location = location
+        self.alignment = alignment or [0]
+
+        for child in self.children:
             child.parent = self
 
     def get_subtree(self, subtree_path: list):
@@ -50,6 +52,26 @@ class Node(object):
             return self._location
         else:
             return self.get_location()
+
+    @location.setter
+    def location(self, location):
+        self._location = location
+
+    @property
+    def alignment(self):
+        return self._alignment  # TODO
+
+    @alignment.setter
+    def alignment(self, alignment):
+        # self._alignment = np.asarray(alignment)
+        self._alignment = alignment
+
+    @property
+    def height(self):
+        if self.parent is None:
+            return self.length
+        else:
+            return self.parent.height + self.length
 
     @property
     def tree_size(self):
@@ -109,11 +131,49 @@ class Node(object):
             y = self[location_median_key % 2]
         else:
             return None
-            # print(location_key)
-            # print(self.attributes)
-            # raise ValueError
 
         return np.array([x, y])
+
+    def get_hpd(self, p_hpd, location_key='location'):
+        attr_keys = list(self.attributes.keys())
+        hpd_key_template = '{location_key}{i_axis}_{p_hpd}%HPD_{i_polygon}'
+        hpd_key_template = hpd_key_template.format(location_key=location_key,
+                                                   p_hpd=p_hpd,
+                                                   i_axis='{i_axis}',
+                                                   i_polygon='{i_polygon}')
+
+        i = 1
+        hpd_key_x = hpd_key_template.format(i_axis=1, i_polygon=i)
+        hpd_key_y = hpd_key_template.format(i_axis=2, i_polygon=i)
+        polygons = []
+        while hpd_key_x in attr_keys:
+            hpd_x_str = self.attributes[hpd_key_x][1:-1]
+            hpd_y_str = self.attributes[hpd_key_y][1:-1]
+            hpd_x = map(float, hpd_x_str.split(','))
+            hpd_y = map(float, hpd_y_str.split(','))
+
+            poly = Polygon(zip(hpd_x, hpd_y))
+            polygons.append(poly)
+
+            i += 1
+            hpd_key_x = hpd_key_template.format(i_axis=1, i_polygon=i)
+            hpd_key_y = hpd_key_template.format(i_axis=2, i_polygon=i)
+
+        return polygons
+
+    def root_in_hpd(self, root, p_hpd, location_key='location'):
+        # Ensure that root is a Point object
+        if not isinstance(root, Point):
+            assert len(root) == 2
+            root = Point(root[0], root[1])
+
+        # Check whether any of the HPD polygons () cover
+        for polygon in self.get_hpd(p_hpd, location_key=location_key):
+            if polygon.contains(root):
+                return True
+
+        return False
+
 
     def iter_edges(self):
         for c in self.children:
@@ -127,7 +187,6 @@ class Node(object):
         for c in self.children.copy():
             if c.name in names:
                 self.children.remove(c)
-                print('Removed:', c.name)
             else:
                 c.remove_nodes_by_name(names)
 
@@ -185,7 +244,8 @@ class Node(object):
         return LOCATION_TEMPLATE.format(id=self.name, x=x, y=y)
 
     def _format_alignment(self):
-        return FEATURES_TEMPLATE.format(id=self.name, features=self.alignment)
+        alignment_str = str_concat_array(self.alignment)
+        return FEATURES_TEMPLATE.format(id=self.name, features=alignment_str)
 
     def _format_tree_locations(self):
         return ''.join(map(Node._format_location, self.iter_leafs()))
@@ -194,7 +254,7 @@ class Node(object):
         return ''.join(map(Node._format_alignment, self.iter_leafs()))
 
     def write_beast_xml(self, output_path, chain_length, root=None, movement_model='rrw',
-                        diffusion_on_a_sphere=False, jitter=0.01):
+                        diffusion_on_a_sphere=False, jitter=0.):
         if movement_model == 'rrw':
             template_path = RRW_XML_TEMPLATE_PATH
         elif movement_model == 'brownian':
@@ -249,6 +309,7 @@ class Node(object):
         for node in self.iter_descendants():
             if node.name in alignments:
                 node.alignment = alignments[node.name]
+                print(node.name, node.alignment)
             else:
                 logging.warning('No alignment found for node "%s"' % node.name)
 
@@ -304,7 +365,6 @@ def parse_node(s, location_key='location', swap_xy=False):
     attributes, s = parse_attributes(s)
 
     length, s = parse_length(s)
-
     node = Node(length, name=name, children=children, attributes=attributes)
 
     node._location = node.get_location(location_key)
@@ -346,15 +406,15 @@ def parse_length(s):
     end = min(find(s, ','), find(s, ')'))
     length = float(s[:end])
     s = s[end:]
-
     return length, s
 
 
 def parse_value(s):
     # TODO do in a clean way
     try:
-        return eval(s)
-    except (NameError, SyntaxError):
+        return float(s)
+    # except (NameError, SyntaxError):
+    except ValueError:
         return s
 
 

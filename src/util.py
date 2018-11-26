@@ -2,11 +2,26 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
+import os
 import csv
 import logging
 import random as _random
+import pickle
 
 import numpy as np
+
+
+def dump(data, path):
+    """Dump the given data to the given path (using pickle)."""
+    mkpath(path)
+    with open(path, 'wb') as dump_file:
+        pickle.dump(data, dump_file)
+
+
+def load_from(path):
+    """Load and return data from the given path (using pickle)."""
+    with open(path, 'rb') as dump_file:
+        return pickle.load(dump_file)
 
 
 def bounding_box(points, margin=None):
@@ -58,7 +73,6 @@ def read_locations_file(locations_path, delimiter='\t', swap_xy=False,
                 logging.warning('No location provided for society: %s' % name)
                 location_missing.append(name)
 
-
             # TODO project here ?
 
             locations[name] = np.array([x, y])
@@ -98,7 +112,7 @@ def find(s, pattern):
 
 def norm(x):
     x = np.asarray(x)
-    return x.dot(x)**0.5
+    return x.dot(x) ** 0.5
 
 
 def normalize(x):
@@ -131,6 +145,10 @@ def total_diffusion_2_step_var(total_diffusion, n_steps):
     return total_diffusion ** 2 / n_steps
 
 
+def mkpath(path):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+
 class StringTemplate(object):
 
     def __init__(self, template_string):
@@ -152,3 +170,25 @@ class StringTemplate(object):
 
     def __str__(self):
         return self.fill()
+
+
+def str_concat_array(a):
+    return ''.join(map(str, a))
+
+
+def extract_tree_line(nexus):
+    for line in nexus.split('\n'):
+        line = line.strip()
+        if line.startswith('tree '):
+            return line
+
+
+def extract_newick_from_nexus(nexus):
+    tree_line = extract_tree_line(nexus)
+    _, tree_name, _, _, newick = tree_line.split()
+
+    return newick
+
+
+class SubprocessException(Exception):
+    pass

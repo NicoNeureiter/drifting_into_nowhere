@@ -6,9 +6,9 @@ CWD=$3
 GEOJSON=$4
 
 cd $CWD
-#export BEAST="/opt/phylo/beast"
-#export LD_LIBRARY_PATH=$HOME/lib:$LD_LIBRARY_PATH
-#export PKG_CONFIG_PATH=$HOME/lib/pkgconfig:$PKG_CONFIG_PATH
+export BEAST="/opt/phylo/beast"
+export LD_LIBRARY_PATH=$HOME/lib:$LD_LIBRARY_PATH
+export PKG_CONFIG_PATH=$HOME/lib/pkgconfig:$PKG_CONFIG_PATH
 
 # Generate posterior samples
 beast -overwrite nowhere.xml

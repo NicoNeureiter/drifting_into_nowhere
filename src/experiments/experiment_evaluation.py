@@ -4,13 +4,16 @@ from __future__ import absolute_import, division, print_function, \
     unicode_literals
 import logging
 import sys
+import collections
 
 import numpy as np
 import matplotlib.pyplot as plt
+from joblib import Parallel, delayed
 
 from src.config import COLORS
 from src.simulation import Simulation
 from src.beast_interface import (run_beast, run_treeannotator)
+from src.plotting import plot_mean_and_std
 from src.util import (total_drift_2_step_drift, total_diffusion_2_step_var,
                       normalize, dist, mkpath, dump, load_from)
 
@@ -22,7 +25,7 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 def run_experiment(n_runs, n_steps, n_expected_societies, total_drift,
-                   total_diffusion, drift_density, drift_direction,
+                   total_diffusion, drift_density, p_settle, drift_direction,
                    chain_length, burnin, hpd_values,
                    movement_model='rrw', working_dir='data/beast/', root=(0, 0)):
     """Run an experiment ´n_runs´ times with the specified parameters.
@@ -38,6 +41,8 @@ def run_experiment(n_runs, n_steps, n_expected_societies, total_drift,
             will move away from the root, due to diffusion.
         drift_density (float): Frequency of drift occurring (does not effect
             the total drift).
+        p_settle (float): Probability of stopping drift and 'settling' at the
+            current location (only diffusion from this point).
         drift_direction (np.array): The direction of drift.
         chain_length (int): MCMC chain length in BEAST analysis.
         burnin (int): MCMC burnin steps in BEAST analysis.
@@ -59,7 +64,7 @@ def run_experiment(n_runs, n_steps, n_expected_societies, total_drift,
     drift_direction = np.asarray(drift_direction)
 
     # Paths
-    mkpath('data/beast/')
+    mkpath(working_dir)
     xml_path = working_dir + 'nowhere.xml'
 
     # Inferred parameters
@@ -83,8 +88,8 @@ def run_experiment(n_runs, n_steps, n_expected_societies, total_drift,
         logger.info('\tRun %i...' % i_run)
 
         # Run Simulation
-        simulation = Simulation(1, 0., step_mean, step_var,
-                                p_split, drift_frequency=drift_density)
+        simulation = Simulation(1, 0., step_mean, step_var, p_split,
+                                p_settle=p_settle, drift_frequency=drift_density)
         simulation.run(n_steps)
 
         # Create an XML file as input for the BEAST analysis
@@ -114,41 +119,29 @@ def run_experiment(n_runs, n_steps, n_expected_societies, total_drift,
     return stats
 
 
-def run_experiments_varying_drift():
-    logger.info('=' * 100)
-    logger.info('New Run')
+def run_experiments_varying_drift(default_settings, working_dir='data/beast'):
     logger.info('=' * 100)
 
-    working_dir = 'data/beast/'
+    # Drift values to be evaluated
+    total_drift_values = np.linspace(0., 2., 3)
 
-    # Simulation Parameters
-    n_steps = 200
-    n_expected_societies = 30
-    total_diffusion = 1.
-    drift_density = 1.
-    drift_direction = normalize([1., .2])
+    # def run(total_drift, i, kwargs):
+    #     logger.info('Experiment with [total_drift = %.2f]' % total_drift)
+    #     kwargs['total_drift'] = total_drift
+    #     default_settings['working_dir'] = working_dir + '_%i' % i
+    #     return total_drift, run_experiment(**kwargs)
+    #
+    # pool = Parallel(n_jobs=2, backend='multiprocessing')
+    # results = pool(delayed(run)(drift, i, default_settings)
+    #                for i, drift in enumerate(total_drift_values))
+    # results = dict(results)
 
-    # Analysis Parameters
-    chain_length = 300000
-    burnin = 10000
-
-    # Experiment Settings
-    n_runs = 20
-    hpd_values = [60, 80, 95]
-    total_drift_values = [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.]
-    # total_drift_values = [0.0, 0.5, 1.0, 1.5]
-
-    # Results
     results = {}
-
     for total_drift in total_drift_values:
         logger.info('Experiment with [total_drift = %.2f]' % total_drift)
 
-        stats = run_experiment(
-            n_runs, n_steps, n_expected_societies, total_drift, total_diffusion,
-            drift_density, drift_direction, chain_length, burnin, hpd_values,
-            working_dir=working_dir)
-
+        default_settings['total_drift'] = total_drift
+        stats = run_experiment(**default_settings, working_dir=working_dir)
         results[total_drift] = stats
 
     # Dump the results in a pickle file
@@ -156,72 +149,125 @@ def run_experiments_varying_drift():
     return results
 
 
-def plot_experiment_results(results):
-    # TODO replace fixed 60, 80, 95 coverage lists by dict
+def run_experiments_varying_p_settle(default_settings, working_dir='data/beast'):
+    logger.info('=' * 100)
 
-    total_drift_values = list(results.keys())
+    # Settling probability values to be evaluated
+    p_settle_values = np.linspace(0., 1., 9)
 
-    x = []
-    l2_errors_all = []
+    results = {}
+    for p_settle in p_settle_values:
+        logger.info('Experiment with [total_drift = %.2f]' % p_settle)
+
+        default_settings['p_settle'] = p_settle
+        stats = run_experiment(**default_settings, working_dir=working_dir)
+        results[p_settle] = stats
+
+    # Dump the results in a pickle file
+    dump(results, working_dir + 'results.pkl')
+    return results
+
+def run_experiments_varying_drift_density(default_settings, working_dir='data/beast/'):
+    logger.info('=' * 100)
+
+    # Settling probability values to be evaluated
+    drift_density_values = np.linspace(0.1, 1., 4)
+
+    results = {}
+    for drift_density in drift_density_values:
+        logger.info('Experiment with [total_drift = %.2f]' % drift_density)
+
+        default_settings['drift_density'] = drift_density
+        stats = run_experiment(**default_settings, working_dir=working_dir)
+        results[drift_density] = stats
+
+    # Dump the results in a pickle file
+    dump(results, working_dir + 'results.pkl')
+    return results
+
+
+def plot_experiment_results(results, x_name='Total Drift'):
+    x_values = list(results.keys())
+
+    l2_error_scatter = []
     l2_errors_mean = []
     l2_errors_std = []
-    coverage_60 = []
-    coverage_80 = []
-    coverage_95 = []
+    coverage_stats = collections.defaultdict(list)
 
-    for total_drift, stats in results.items():
+    for x, stats in results.items():
         l2_errors = stats['l2_error']
+
+        # Compute L2-error statistics
         l2_errors_mean.append(np.mean(l2_errors))
         l2_errors_std.append(np.std(l2_errors))
-        l2_errors_all += l2_errors
-        x += [total_drift] * len(l2_errors)
 
+        # Store L2-error values for scatter plot
+        for y in l2_errors:
+            l2_error_scatter.append([x, y])
+
+        # Compute coverage statistics
         hpd_coverages = stats['hpd_coverage']
-        coverage_60.append(np.mean(hpd_coverages[60]))
-        coverage_80.append(np.mean(hpd_coverages[80]))
-        coverage_95.append(np.mean(hpd_coverages[95]))
+        for p, hits in hpd_coverages.items():
+            coverage_stats[p].append(np.mean(hits))
 
     # Transform to numpy
+    l2_error_scatter = np.asarray(l2_error_scatter)
     l2_errors_mean = np.asarray(l2_errors_mean)
     l2_errors_std = np.asarray(l2_errors_std)
 
-    # Plot the results in scatter plots
-    plt.scatter(x, l2_errors_all, c='lightgrey')
-    plt.plot(total_drift_values, l2_errors_mean, c=COLORS[0],
-             label=r'L2-Error of reconstructed root')
-    plt.plot(total_drift_values, l2_errors_mean + l2_errors_std, c=COLORS[0], ls='--')
-    plt.plot(total_drift_values, l2_errors_mean - l2_errors_std, c=COLORS[0], ls='--')
-    plt.fill_between(total_drift_values,
-                     l2_errors_mean - l2_errors_std,
-                     l2_errors_mean + l2_errors_std,
-                     color=COLORS[0], alpha=0.05, zorder=0)
-
+    # Plot the mean L2-Errors +/- standard deviation
+    plt.scatter(*l2_error_scatter.T, c='lightgrey')
+    # plt.plot(x_values, x_values, c='k', lw=0.4)
+    plot_mean_and_std(x_values, l2_errors_mean, l2_errors_std, color=COLORS[0],
+                      label=r'Average L2-error of reconstructed root')
     plt.legend()
-    plt.xlim(total_drift_values[0], total_drift_values[-1])
+    plt.xlim(x_values[0], x_values[-1])
+    plt.ylim(0, None)
     plt.show()
 
-    plt.plot(total_drift_values, coverage_60, c=COLORS[0],
-             label=r'60% HPD coverage')
-    plt.axhline(0.6, c=COLORS[0], ls='--', alpha=0.3)
-    plt.plot(total_drift_values, coverage_80, c=COLORS[1],
-             label=r'80% HPD coverage')
-    plt.axhline(0.8, c=COLORS[1], ls='--', alpha=0.3)
-    plt.plot(total_drift_values, coverage_95, c=COLORS[2],
-             label=r'90% HPD coverage')
-    plt.axhline(0.95, c=COLORS[2], ls='--', alpha=0.3)
+    # Plot a curve and
+    for i, (p, coverage) in enumerate(coverage_stats.items()):
+        plt.plot(x_values, coverage,
+                 c=COLORS[i], label='%i%% HPD coverage' % p)
+        plt.axhline(p/100, c=COLORS[i], ls='--', alpha=0.3)
 
     plt.legend()
-    plt.xlim(total_drift_values[0], total_drift_values[-1])
+    plt.xlim(x_values[0], x_values[-1])
+    plt.ylim(-0.02, 1.03)
     plt.show()
 
 
 if __name__ == '__main__':
     WORKING_DIR = 'data/beast/'
-    MODE = 'load'
 
-    if MODE == 'rerun':
-        results = run_experiments_varying_drift()
-    else:
-        results = load_from(WORKING_DIR + 'results.pkl')
+    # Default experiment parameters
+    default_settings = {
+        # Simulation parameters
+        'n_steps': 200,
+        'n_expected_societies': 30,
+        'total_diffusion': 1.,
+        'total_drift': 1.,
+        'drift_density': 1.,
+        'drift_direction': normalize([1., .2]),
+        'p_settle': 0.,
 
+        # Analysis Parameters
+        'chain_length': 300000,
+        'burnin': 10000,
+
+        # Experiment Settings
+        'n_runs': 10,
+        'hpd_values': [60, 80, 95]
+    }
+
+    mode = 'p_settle'
+    if mode == 'p_settle':
+        run_experiments_varying_p_settle(default_settings)
+    elif mode == 'drift_density':
+        run_experiments_varying_drift_density(default_settings)
+    elif mode == 'total_drift':
+        run_experiments_varying_drift(default_settings)
+
+    results = load_from(WORKING_DIR + 'results.pkl')
+    # results = load_from(WORKING_DIR + 'results_20182211_1621.pkl')
     plot_experiment_results(results)

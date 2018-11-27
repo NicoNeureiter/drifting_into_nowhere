@@ -298,5 +298,14 @@ def simulation_plots(simulation, tree_rec, save_path=None):
     plot_walk(simulation, show_path=False, show_tree=False, ax=plt.gca())
     show(xlim, ylim)
 
+
+def plot_mean_and_std(x, y_mean, y_std, color='blue', label=None):
+    plt.plot(x, y_mean, c=color, label=label)
+    plt.plot(x, y_mean + y_std, c=color, ls='--', label='+/- standard deviation')
+    plt.plot(x, y_mean - y_std, c=color, ls='--')
+    plt.fill_between(x, y_mean-y_std, y_mean+y_std,
+                     color=color, alpha=0.05, zorder=0)
+
+
 if __name__ == '__main__':
     plot_rrw_step_pdf()

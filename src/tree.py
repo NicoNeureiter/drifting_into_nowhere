@@ -174,7 +174,6 @@ class Node(object):
 
         return False
 
-
     def iter_edges(self):
         for c in self.children:
             yield self, c

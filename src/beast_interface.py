@@ -7,9 +7,11 @@ import logging
 
 from src.beast_xml_templates import *
 from src.tree import Node
-from src.util import str_concat_array, extract_newick_from_nexus, SubprocessException
+from src.util import str_concat_array, extract_newick_from_nexus, SubprocessException, mkpath
 
 BEAST_LOGGER_PATH = 'logs/beast.log'
+mkpath(BEAST_LOGGER_PATH)
+
 beast_logger = logging.getLogger('beast')
 beast_logger.setLevel(logging.DEBUG)
 beast_logger.addHandler(logging.FileHandler(BEAST_LOGGER_PATH))
@@ -140,8 +142,8 @@ def run_beast(working_dir):
 
     ret = subprocess.run(bash_command, shell=True, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
-    beast_logger.info(ret.stdout)
-    beast_logger.info(ret.stderr)
+    beast_logger.info(ret.stdout.decode())
+    beast_logger.info(ret.stderr.decode())
     if ret.returncode != 0:
         raise SubprocessException
 
@@ -159,8 +161,8 @@ def run_treeannotator(hpd, burnin, working_dir):
 
     ret = subprocess.run(bash_command, shell=True, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
-    beast_logger.info(ret.stdout)
-    beast_logger.info(ret.stderr)
+    beast_logger.info(ret.stdout.decode())
+    beast_logger.info(ret.stderr.decode())
     if ret.returncode != 0:
         raise SubprocessException
 

@@ -6,6 +6,7 @@ from __future__ import absolute_import, division, print_function, \
 import numpy as np
 from numpy.random import multivariate_normal as gaussian
 import matplotlib.pyplot as plt
+import collections
 
 from src.tree import Node
 from src.util import newick_tree, bernoulli, norm, normalize
@@ -185,13 +186,14 @@ class State(Node):
 class Simulation(object):
 
     def __init__(self, n_features, rate, step_mean, step_variance, p_split,
-                 drift_frequency=1., repulsive_force=0.):
+                 p_settle=0., drift_frequency=1., repulsive_force=0.):
         self.n_features = n_features
 
         self.step_mean = step_mean
         self.step_variance = step_variance
         self.step_cov = step_variance * np.eye(2)
         self.p_split = p_split
+        self.p_settle = p_settle
         self.drift_frequency = drift_frequency
         self.repulsive_force = repulsive_force
 
@@ -274,6 +276,9 @@ class Simulation(object):
         c1 = society.create_child()
         c2 = society.create_child()
 
+        if bernoulli(self.p_settle):
+            c1.geoState.step_mean = np.zeros(2)
+
         self.societies[i] = c1
         self.societies.append(c2)
 
@@ -284,13 +289,13 @@ class Simulation(object):
             s.id = i
 
         edges = []
-        todo = [self.root]
+        todo = collections.deque([self.root])
         while todo:
             s = todo.pop()
 
             for c in s.children:
                 edges.append((s.id, c.id))
-                todo.append(c)
+                todo.appendleft(c)
 
         return vertices, edges
 

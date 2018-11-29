@@ -5,10 +5,12 @@ from __future__ import absolute_import, division, print_function, \
 import logging
 import sys
 import collections
+import json
+import datetime
 
 import numpy as np
 import matplotlib.pyplot as plt
-from joblib import Parallel, delayed
+# from joblib import Parallel, delayed
 
 from src.config import COLORS
 from src.simulation import Simulation
@@ -26,8 +28,8 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 
 def run_experiment(n_runs, n_steps, n_expected_societies, total_drift,
                    total_diffusion, drift_density, p_settle, drift_direction,
-                   chain_length, burnin, hpd_values,
-                   movement_model='rrw', working_dir='data/beast/', root=(0, 0)):
+                   chain_length, burnin, hpd_values, working_dir,
+                   movement_model='rrw', root=(0, 0)):
     """Run an experiment ´n_runs´ times with the specified parameters.
 
     Args:
@@ -119,11 +121,11 @@ def run_experiment(n_runs, n_steps, n_expected_societies, total_drift,
     return stats
 
 
-def run_experiments_varying_drift(default_settings, working_dir='data/beast'):
+def run_experiments_varying_drift(default_settings, working_dir):
     logger.info('=' * 100)
 
     # Drift values to be evaluated
-    total_drift_values = np.linspace(0., 2., 3)
+    total_drift_values = np.linspace(0., 2., 11)
 
     # def run(total_drift, i, kwargs):
     #     logger.info('Experiment with [total_drift = %.2f]' % total_drift)
@@ -149,15 +151,15 @@ def run_experiments_varying_drift(default_settings, working_dir='data/beast'):
     return results
 
 
-def run_experiments_varying_p_settle(default_settings, working_dir='data/beast'):
+def run_experiments_varying_p_settle(default_settings, working_dir):
     logger.info('=' * 100)
 
     # Settling probability values to be evaluated
-    p_settle_values = np.linspace(0., 1., 9)
+    p_settle_values = np.linspace(0., 1., 11)
 
     results = {}
     for p_settle in p_settle_values:
-        logger.info('Experiment with [total_drift = %.2f]' % p_settle)
+        logger.info('Experiment with [p_settle = %.2f]' % p_settle)
 
         default_settings['p_settle'] = p_settle
         stats = run_experiment(**default_settings, working_dir=working_dir)
@@ -167,15 +169,17 @@ def run_experiments_varying_p_settle(default_settings, working_dir='data/beast')
     dump(results, working_dir + 'results.pkl')
     return results
 
-def run_experiments_varying_drift_density(default_settings, working_dir='data/beast/'):
+
+def run_experiments_varying_drift_density(default_settings, working_dir):
     logger.info('=' * 100)
 
     # Settling probability values to be evaluated
-    drift_density_values = np.linspace(0.1, 1., 4)
+    # drift_density_values = np.linspace(0.5, 1., 20)
+    drift_density_values = 2**(-np.linspace(0., 10., 11))
 
     results = {}
     for drift_density in drift_density_values:
-        logger.info('Experiment with [total_drift = %.2f]' % drift_density)
+        logger.info('Experiment with [drift_density = %.2f]' % drift_density)
 
         default_settings['drift_density'] = drift_density
         stats = run_experiment(**default_settings, working_dir=working_dir)
@@ -186,7 +190,7 @@ def run_experiments_varying_drift_density(default_settings, working_dir='data/be
     return results
 
 
-def plot_experiment_results(results, x_name='Total Drift'):
+def plot_experiment_results(results, x_name='Total Drift', xscale='linear'):
     x_values = list(results.keys())
 
     l2_error_scatter = []
@@ -217,12 +221,15 @@ def plot_experiment_results(results, x_name='Total Drift'):
 
     # Plot the mean L2-Errors +/- standard deviation
     plt.scatter(*l2_error_scatter.T, c='lightgrey')
-    # plt.plot(x_values, x_values, c='k', lw=0.4)
+    plt.plot(x_values, x_values, c='k', lw=0.4)
     plot_mean_and_std(x_values, l2_errors_mean, l2_errors_std, color=COLORS[0],
                       label=r'Average L2-error of reconstructed root')
+
+    plt.xscale(xscale)
     plt.legend()
-    plt.xlim(x_values[0], x_values[-1])
+    plt.xlim(min(x_values), max(x_values))
     plt.ylim(0, None)
+    plt.xlabel(x_name)
     plt.show()
 
     # Plot a curve and
@@ -231,43 +238,60 @@ def plot_experiment_results(results, x_name='Total Drift'):
                  c=COLORS[i], label='%i%% HPD coverage' % p)
         plt.axhline(p/100, c=COLORS[i], ls='--', alpha=0.3)
 
+    plt.xscale(xscale)
     plt.legend()
-    plt.xlim(x_values[0], x_values[-1])
+    plt.xlim(min(x_values), max(x_values))
     plt.ylim(-0.02, 1.03)
+    plt.xlabel(x_name)
     plt.show()
 
 
 if __name__ == '__main__':
-    WORKING_DIR = 'data/beast/'
+    P_SETTLE = 'settling_probability'
+    DENSITY = 'drift_density'
+    DRIFT = 'total_drift'
+    MODES = [P_SETTLE, DENSITY, DRIFT]
+    mode = MODES[2]
+
+    WORKING_DIR = 'data/experiments/{mode}/{time}/'
+    today = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
+    WORKING_DIR = WORKING_DIR.format(mode=mode, time=today)
+    mkpath(WORKING_DIR)
 
     # Default experiment parameters
     default_settings = {
         # Simulation parameters
-        'n_steps': 200,
-        'n_expected_societies': 30,
+        'n_steps': 500,
+        'n_expected_societies': 500,
         'total_diffusion': 1.,
         'total_drift': 1.,
         'drift_density': 1.,
-        'drift_direction': normalize([1., .2]),
+        'drift_direction': list(normalize([1., .2])),
         'p_settle': 0.,
 
         # Analysis Parameters
-        'chain_length': 300000,
-        'burnin': 10000,
+        'chain_length': 500000,
+        'burnin': 20000,
 
         # Experiment Settings
-        'n_runs': 10,
+        'n_runs': 100,
         'hpd_values': [60, 80, 95]
     }
 
-    mode = 'p_settle'
-    if mode == 'p_settle':
-        run_experiments_varying_p_settle(default_settings)
-    elif mode == 'drift_density':
-        run_experiments_varying_drift_density(default_settings)
-    elif mode == 'total_drift':
-        run_experiments_varying_drift(default_settings)
+    # Safe the default settings
+    with open(WORKING_DIR+'settings.json', 'w') as json_file:
+        json.dump(default_settings, json_file)
 
+    # Run the experiment
+    if 1:
+        if mode == P_SETTLE:
+            run_experiments_varying_p_settle(default_settings, working_dir=WORKING_DIR)
+        elif mode == DENSITY:
+            run_experiments_varying_drift_density(default_settings, working_dir=WORKING_DIR)
+        elif mode == DRIFT:
+            run_experiments_varying_drift(default_settings, working_dir=WORKING_DIR)
+
+    # Plot the results
+    # WORKING_DIR = WORKING_DIR.format(mode=mode, time='2018-11-28')
     results = load_from(WORKING_DIR + 'results.pkl')
-    # results = load_from(WORKING_DIR + 'results_20182211_1621.pkl')
-    plot_experiment_results(results)
+    plot_experiment_results(results, x_name=mode, xscale='linear')

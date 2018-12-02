@@ -24,20 +24,20 @@ if __name__ == '__main__':
 
     # Simulation Parameters
     ROOT = np.array([0., 0.])
-    N_STEPS = 200
+    N_STEPS = 500
     N_FEATURES = 5
 
-    N_EXPECTED_SOCIETIES = 30
+    N_EXPECTED_SOCIETIES = 100
     RATE_OF_CHANGE = 0.1
-    TOTAL_DRIFT = 30.
+    TOTAL_DRIFT = 5.
     TOTAL_DIFFUSION = 1.
     DRIFT_DENSITY = 1.
-    DRIFT_DIRECTION = normalize([1., .2])
+    DRIFT_DIRECTION = normalize([1., 0.])
 
     # Analysis Parameters
-    CHAIN_LENGTH = 50000
-    BURNIN = 5000
-    HPD = 60
+    CHAIN_LENGTH = 200000
+    BURNIN = 20000
+    HPD = 80
 
     # Inferred parameters
     step_var = total_diffusion_2_step_var(TOTAL_DIFFUSION, N_STEPS)
@@ -92,9 +92,9 @@ if __name__ == '__main__':
         return sim
 
     # Run Simulation
-    simulation = SimulationBackbone(N_FEATURES, RATE_OF_CHANGE, step_mean, step_var, p_split,
-                                    drift_frequency=DRIFT_DENSITY, repulsive_force=0,
-                                    backbone_steps=20)
+    simulation = Simulation(N_FEATURES, RATE_OF_CHANGE, step_mean, step_var, p_split,
+                            drift_frequency=DRIFT_DENSITY, repulsive_force=0,
+                            p_settle=.5)
     simulation.run(N_STEPS)
 
     # Create an XML file as input for the BEAST analysis

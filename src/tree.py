@@ -33,7 +33,7 @@ class Node(object):
 
         self.parent = parent
         self.attributes = attributes or {}
-        self.location = location
+        self._location = location
         self.alignment = alignment or [0]
 
         for child in self.children:
@@ -51,7 +51,7 @@ class Node(object):
         if self._location is not None:
             return self._location
         else:
-            return self.get_location()
+            return self.get_location_from_attributes()
 
     @location.setter
     def location(self, location):
@@ -73,21 +73,18 @@ class Node(object):
         else:
             return self.parent.height + self.length
 
-    @property
     def tree_size(self):
         size = 1
         for c in self.children:
-            size += c.tree_size
+            size += c.tree_size()
         return size
 
-    @property
     def n_leafs(self):
-        size = 1 if self.is_leaf else 0
+        size = 1 if self.is_leaf() else 0
         for c in self.children:
-            size += c.n_leafs
+            size += c.n_leafs()
         return size
 
-    @property
     def is_leaf(self):
         return len(self.children) == 0
 
@@ -116,10 +113,31 @@ class Node(object):
             Node: The parsed tree.
         """
         newick = remove_whitespace(newick)
+
+        hpd_pattern = r'%HPD_1={'
+        p_hpd = None
+        if hpd_pattern in newick:
+            before_pattern, _, _ = newick.partition(hpd_pattern)
+            _, _, p_hpd_str = before_pattern.rpartition('_')
+            assert len(p_hpd_str) in [1, 2]
+            p_hpd = int(p_hpd_str)
+
         node, _ = parse_node(newick, location_key=location_key, swap_xy=swap_xy)
+        if p_hpd is not None:
+            node.p_hpd = p_hpd
+
         return node
 
-    def get_location(self, location_key='location'):
+    def get_location_from_attributes(self, location_key='location'):
+        """Extract the location from the attributes dict (if present) and return
+        it as a np.array (or None)
+
+        Kwargs:
+            location_key (str): the suffix of the dictionary key for the location
+                in the attributes dictionary.
+        Returns:
+            np.array or None: The extracted locations of the node.
+        """
         location_key += '%i'
         location_median_key = location_key + '_median'
 
@@ -135,6 +153,7 @@ class Node(object):
         return np.array([x, y])
 
     def get_hpd(self, p_hpd, location_key='location'):
+        """Extract the HPD from the attributes dict."""
         attr_keys = list(self.attributes.keys())
         hpd_key_template = '{location_key}{i_axis}_{p_hpd}%HPD_{i_polygon}'
         hpd_key_template = hpd_key_template.format(location_key=location_key,
@@ -162,6 +181,9 @@ class Node(object):
         return polygons
 
     def root_in_hpd(self, root, p_hpd, location_key='location'):
+        """Check whether the given root location is covered by the HPD in the
+        node attributes."""
+
         # Ensure that root is a Point object
         if not isinstance(root, Point):
             assert len(root) == 2
@@ -175,11 +197,15 @@ class Node(object):
         return False
 
     def iter_edges(self):
+        """Iterate over all edges in the tree."""
         for c in self.children:
             yield self, c
             yield from c.iter_edges()
 
     def remove_nodes_by_name(self, names):
+        """Remove nodes with the given names from the tree, preserving a valid
+        tree topology and branch lengths."""
+
         was_leaf = (len(self.children) == 0)
 
         # Recursively remove nodes
@@ -212,6 +238,7 @@ class Node(object):
             c.length += self.length
 
     def to_newick(self, write_attributes=True):
+        """Compute a Newick string representation of the tree."""
         if self.children:
             children = ','.join([c.to_newick(write_attributes=write_attributes)
                                  for c in self.children])
@@ -227,6 +254,7 @@ class Node(object):
         return '{core}{attrs}:{len}'.format(core=core, attrs=attr_str, len=self.length)
 
     def copy_other_node(self, other: 'Node'):
+        # TODO Iterate over attrs?
         self.name = other.name
         self.length = other.length
         self.parent = other.parent
@@ -252,8 +280,9 @@ class Node(object):
     def _format_tree_alignments(self):
         return ''.join(map(Node._format_alignment, self.iter_leafs()))
 
-    def write_beast_xml(self, output_path, chain_length, root=None, movement_model='rrw',
-                        diffusion_on_a_sphere=False, jitter=0.):
+    def write_beast_xml(self, output_path, chain_length, root=None,
+                        movement_model='rrw', diffusion_on_a_sphere=False,
+                        jitter=0., adapt_height=False, adapt_tree=False):
         if movement_model == 'rrw':
             template_path = RRW_XML_TEMPLATE_PATH
         elif movement_model == 'brownian':
@@ -285,10 +314,12 @@ class Node(object):
 
         # Set parameters
         xml_template.chain_length = chain_length
-        xml_template.ntax = self.n_leafs
+        xml_template.ntax = self.n_leafs()
         xml_template.nchar = len(self.alignment)
         xml_template.jitter = jitter
         xml_template.spherical = SPHERICAL if diffusion_on_a_sphere else ''
+        xml_template.tree_operators = TREE_OPERATORS if adapt_tree else ''
+        xml_template.height_operators = HEIGHT_OPERATORS if adapt_height else ''
 
         with open(output_path, 'w') as beast_xml_file:
             beast_xml_file.write(
@@ -318,7 +349,7 @@ class Node(object):
             yield from c.iter_descendants()
 
     def iter_leafs(self):
-        if self.is_leaf:
+        if self.is_leaf():
             yield self
         for c in self.children:
             yield from c.iter_leafs()
@@ -328,6 +359,30 @@ class Node(object):
 
     def __repr__(self):
         return 'node_' + self.name
+
+
+def node_imbalance(node: Node):
+    assert len(node.children) <= 2
+    if len(node.children) < 2:
+        return 0
+    if node.tree_size() < 4:
+        return 0
+
+    c1, c2 = node.children
+
+    size = node.tree_size()
+    bigger = max(c1.tree_size, c2.tree_size)
+    m = np.ceil(size / 2)
+
+    return (bigger - m) / (size - m - 1)
+
+
+def tree_imbalance(root):
+    # TODO: According to (Purvis and Agapow 2002) we should use a weighted mean
+    # "Purvis and Agapow: Phylogeny imbalance and taxonomic level"
+
+    node_imbalances = [node_imbalance(n) for n in root.iter_nodes()]
+    return np.mean(node_imbalances)
 
 
 def parse_node(s, location_key='location', swap_xy=False):
@@ -366,7 +421,7 @@ def parse_node(s, location_key='location', swap_xy=False):
     length, s = parse_length(s)
     node = Node(length, name=name, children=children, attributes=attributes)
 
-    node._location = node.get_location(location_key)
+    node._location = node.get_location_from_attributes(location_key)
     if swap_xy:
         node._location = node._location[::-1]
 
@@ -474,6 +529,9 @@ def test_newick():
     assert c.length == 5.6
 
     print('Test SUCCESSFUL: parse_newick')
+
+def test_tree_imbalance():
+    pass
 
 
 if __name__ == '__main__':

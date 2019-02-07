@@ -34,7 +34,7 @@ OUTGROUP_NAMES = [
 
 
 def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
-                    movement_model='rrw'):
+                    movement_model='rrw', adapt_tree=False, adapt_height=False):
     with open(NEWICK_TREE_PATH, 'r') as tree_file:
         tree_str = tree_file.read()
 
@@ -44,21 +44,37 @@ def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
     if exclude_outgroup:
         tree.remove_nodes_by_name(OUTGROUP_NAMES)
 
+    # tree = tree.get_subtree([1,1,1,1,1,1])
+
     tree.write_beast_xml(xml_path, chain_length, root=root,
-                         diffusion_on_a_sphere=True, movement_model=movement_model)
+                         diffusion_on_a_sphere=True, movement_model=movement_model,
+                         adapt_tree=adapt_tree, adapt_height=adapt_height)
 
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
+    import geopandas as gpd
     from src.beast_interface import run_beast, run_treeannotator, load_tree_from_nexus
-    from src.plotting import plot_hpd, plot_root
-    from src.config import COLOR_ROOT_TRUE
+    from src.plotting import plot_hpd, plot_root, plot_tree, plot_height, plot_edge
+    from src.util import grey
+    from src.config import COLOR_ROOT_TRUE, PINK, TURQUOISE
 
-    CHAIN_LENGTH = 2000000
+    CHAIN_LENGTH = 500000
     BURNIN = 50000
     HPD = 80
 
-    WORKING_DIR = 'data/bantu_withoutgroup_2/'
+    MODEL = 'rrw'
+    USE_OUTGROUP = 1
+    ADAPT_TREE = 0
+    ADAPT_HEIGHT = 0
+    FIX_ROOT = 1
+
+    WORKING_DIR = 'data/bantu_{model}_outgroup_{og}_adapttree_{at}_' + \
+                  'adaptheight_{ah}_hpd_{hpd}{fixroot}/'
+    WORKING_DIR = WORKING_DIR.format(
+        model=MODEL, og=USE_OUTGROUP, at=ADAPT_TREE, ah=ADAPT_HEIGHT, hpd=HPD,
+        fixroot='_fixroot' if FIX_ROOT else ''
+    )
     SCRIPT_PATH = 'src/beast_pipeline.sh'
     BANTU_XML_PATH = WORKING_DIR + 'nowhere.xml'
     GEOJSON_PATH = 'africa.geojson'
@@ -67,9 +83,13 @@ if __name__ == '__main__':
 
     # BANTU_ROOT = np.array([6.5, 10.5])
     BANTU_ROOT = np.array([10.5, 6.5])
-
-    write_bantu_xml(BANTU_XML_PATH, CHAIN_LENGTH, root=None, exclude_outgroup=True,
-                    movement_model='rrw')
+    #
+    write_bantu_xml(BANTU_XML_PATH, CHAIN_LENGTH,
+                    root=BANTU_ROOT if FIX_ROOT else None,
+                    exclude_outgroup=not USE_OUTGROUP,
+                    adapt_tree=ADAPT_TREE,
+                    adapt_height=ADAPT_HEIGHT,
+                    movement_model=MODEL)
                     # movement_model='brownian')
 
     # Run the BEAST analysis
@@ -80,3 +100,26 @@ if __name__ == '__main__':
     tree = load_tree_from_nexus(GEO_TREE_PATH)
     okcool = tree.root_in_hpd(BANTU_ROOT, HPD)
     print('\n\nOk cool: %r' % okcool)
+
+    XLIM = (-30, 60)
+    YLIM = (-35, 25)
+    swap_xy = False
+    HOMELAND = np.array([6.5, 10.5])
+    LW = 0.1
+    cmap = plt.get_cmap('viridis')
+
+    world = gpd.read_file('data/naturalearth_50m_wgs84.geojson')
+    ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.4, )
+
+    from src.analyze_tree import flatten, invert, get_edge_heights
+    plot_tree(tree, lw=LW, color='k')
+              # cmap=cmap, color_fun=flatten(invert(get_edge_heights), .7))
+    root = tree.location
+    plt.scatter(root[0], root[1], marker='*', c=PINK, s=500, zorder=3)
+    plt.scatter(HOMELAND[1], HOMELAND[0], marker='*', c=TURQUOISE, s=500, zorder=3)
+
+    ax.set_xlim(XLIM)
+    ax.set_ylim(YLIM)
+    plt.axis('off')
+    plt.tight_layout(pad=0.)
+    plt.show()

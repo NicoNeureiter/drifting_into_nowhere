@@ -151,12 +151,23 @@ def mkpath(path):
 
 class StringTemplate(object):
 
+    """A class for StringTemplates, where fields can be filled one after another
+     in contrast to str.format() where all fields are filled at once. The class
+     also provides a little syntactic sugar to set template fields as attributes.
+
+    Attributes:
+        template_string (str): String template to be filled with attributes.
+        format_dict (dict): Dictionary containing all set attributes.
+    """
+
     def __init__(self, template_string):
+
+        # Since we override StringTemplate.__setattr__(), we need to explicitly
+        # use object.__setattr__() to define attributes.
         super(StringTemplate, self).__setattr__('template_string', template_string)
         super(StringTemplate, self).__setattr__('format_dict', {})
 
     def __setattr__(self, key, value):
-        # super(StringTemplate, self).__setattr__(key, value)
         self.set_value(key, value)
 
     def set_value(self, key, value):
@@ -188,6 +199,17 @@ def extract_newick_from_nexus(nexus):
     _, tree_name, _, _, newick = tree_line.split()
 
     return newick
+
+
+def transform_tree_coordinates(tree, trafo):
+    for node in tree.iter_descendants():
+        node.location = trafo(node)
+
+
+def time_drift_trafo(node):
+    x, y = node.location
+    # drft = 0.877 * x - 0.479 * y
+    return x, -node.height
 
 
 class SubprocessException(Exception):

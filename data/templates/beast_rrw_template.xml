@@ -197,6 +197,8 @@
 		<uniformIntegerOperator weight="10">
 			<parameter idref="location.rrwCategories"/>
 		</uniformIntegerOperator>
+{tree_operators}
+{height_operators}
 
 		<!-- START Multivariate diffusion model                                      -->
 		<precisionGibbsOperator weight="10">

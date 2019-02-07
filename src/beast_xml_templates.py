@@ -40,6 +40,29 @@ GEO_PRIOR = '''\
 '''
 SPHERICAL = ' greatCircleDistance="true"'
 
+HEIGHT_OPERATORS = '''
+		<scaleOperator scaleFactor="0.75" weight="3">
+			<parameter idref="treeModel.rootHeight"/>
+		</scaleOperator>
+		<uniformOperator weight="30">
+			<parameter idref="treeModel.internalNodeHeights"/>
+		</uniformOperator>
+'''
+TREE_OPERATORS = '''
+		<subtreeSlide size="1.0" gaussian="true" weight="15">
+			<treeModel idref="treeModel"/>
+		</subtreeSlide>
+		<narrowExchange weight="15">
+			<treeModel idref="treeModel"/>
+		</narrowExchange>
+		<wideExchange weight="3">
+			<treeModel idref="treeModel"/>
+		</wideExchange>
+		<wilsonBalding weight="3">
+			<treeModel idref="treeModel"/>
+		</wilsonBalding>
+'''
+
 
 ################################################################################
 # Nexus & locations csv templates

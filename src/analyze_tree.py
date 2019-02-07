@@ -10,8 +10,8 @@ import geopandas as gpd
 
 from src.tree import Node
 from src.util import norm, normalize, grey, extract_newick_from_nexus
-from src.plotting import circular_histogram, plot_hpd, plot_tree
-from src.config import PINK, TURQUOISE
+from src.plotting import *
+from src.config import PINK, TURQUOISE, COLORS
 
 
 def get_edge_drift_agreement(parent, child):
@@ -136,7 +136,6 @@ if __name__ == '__main__':
     # FAMILY = 'ie'
 
     if FAMILY == 'bantu':
-        TREE_PATH = 'data/bantu_withoutgroup_2/nowhere.tree'
         LOCATION_KEY = 'location'
         # XLIM = (2, 52)
         # YLIM = (-35, 15)
@@ -147,14 +146,18 @@ if __name__ == '__main__':
         swap_xy = False
         HOMELAND = np.array([6.5, 10.5])
         LW = 0.1
-        HPD = 60
+        HPD = 80
 
-        PLOT_DRIFT_LEGEND = False
-        PLOT_TREE = True
-        PLOT_HPD = True
-        PLOT_ROOT = True
-        PLOT_HOMELAND = True
-        PLOT_TIPS = False
+        # TREE_PATH = 'data/bantu_withoutgroup_2/nowhere.tree'
+        TREE_PATH = 'data/bantu_rrw_outgroup_0_adapttree_0_adaptheight_0_hpd_{hpd}/nowhere.tree'.format(hpd=HPD)
+        # TREE_PATH = 'data/bantu_brownian_without_outgroup/nowhere.tree'
+
+        PLOT_DRIFT_LEGEND = 0
+        PLOT_TREE = 1
+        PLOT_HPD = 0
+        PLOT_ROOT = 0
+        PLOT_HOMELAND = 1
+        PLOT_TIPS = 0
 
     elif FAMILY == 'ie':
         TREE_PATH = 'data/ie/IE_2MCCs.tree'
@@ -180,28 +183,14 @@ if __name__ == '__main__':
     else:
         raise ValueError()
 
-    # cmap = plt.get_cmap('PiYG')
-    # cmap = plt.get_cmap('RdYlGn')
-    # cmap = plt.get_cmap('inferno')
-    # cmap = plt.get_cmap('plasma')
-    cmap = plt.get_cmap('viridis')
-    # cmap = plt.get_cmap('gnuplot')
-
     # Plot the world map in the background.
     # world = gpd.read_file(gpd.datasets.get_path('naturalearth_lowres'))
     world = gpd.read_file('data/naturalearth_50m_wgs84.geojson')
     # world = gpd.read_file('data/ne_50m_admin_0_countries.geojson')
 
-
-
-    # world = world.to_crs(epsg=3395)
-    # world = world.to_crs(epsg=3035)
-    # XLIM = (-4e6, 11e6)
-    # YLIM = (0e6, 11.5e6)
-    # XLIM = (-3e6, 9e6)
-    # YLIM = (3e6, 11.5e6)
-    ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.4, )
-    # ax = world.plot(color=grey(.98), edgecolor=grey(0.), lw=.3, )
+    ax = world.plot(color=grey(.05), edgecolor=grey(0.05), lw=.4, )
+    cmap = plt.get_cmap('viridis')
+    # 'viridis', 'inferno', 'plasma', 'gnuplot', 'PiYG', 'RdYlGn',
 
     # Load Tree
     with open(TREE_PATH, 'r') as tree_file:
@@ -210,28 +199,33 @@ if __name__ == '__main__':
         tree = Node.from_newick(newick_str, location_key=LOCATION_KEY, swap_xy=swap_xy)
         # tree = tree.get_subtree([0, 0, 0, 0])
 
+        okcool = tree.root_in_hpd(HOMELAND, HPD)
+        print('\n\nOk cool: %r' % okcool)
+
     # Plot Tree
     if PLOT_TREE:
-        plot_tree(tree, cmap=cmap,
-                  color_fun=flatten(invert(get_edge_heights), .7),
+        plot_tree(tree, # cmap=cmap,
+                  # color_fun=flatten(invert(get_edge_heights), 1.),
+                  color='orange',
                   # color_fun=get_edge_drift_agreement,
-                  # alpha_fun=flatten(get_edge_heights, .01),
+                  alpha_fun=flatten(get_edge_heights, .9),
                   lw=LW)
 
-    if PLOT_HPD:
-        okcool = plot_hpd(tree, HPD)  #, root=HOMELAND[::-1], color=PINK, zorder=2)
+        # plot_backbone_splits(tree, plot_edges=False, lw=LW)
+        # plot_subtree_hulls(tree)
+        # plot_tree(tree, color='k', lw=0.05)
 
+    if PLOT_HPD:
+        okcool = plot_hpd(tree, HPD, color=PINK)
     if PLOT_ROOT:
         root = tree.location
         plt.scatter(root[0], root[1], marker='*', c=PINK, s=500, zorder=3)
-        # plt.scatter(root[0], root[1], marker='*', c=(0.85, 0.7, 0.), s=800, zorder=2,
-        #             edgecolors=(0.35, 0.3, 0), lw=1.)
+        # plt.scatter(root[0], root[1], marker='*', c='w', s=5000, zorder=3, edgecolor='k')
     if PLOT_HOMELAND:
         plt.scatter(HOMELAND[1], HOMELAND[0], marker='*', c=TURQUOISE, s=500, zorder=3)
 
 
     if PLOT_DRIFT_LEGEND:
-        # px, py = -3., 73.
         px, py = 8., -30.
         r = 2.5
         n_arrows = 10
@@ -258,3 +252,11 @@ if __name__ == '__main__':
     plt.axis('off')
     plt.tight_layout(pad=0.)
     plt.show()
+
+    # # Plot backbone-splits over time.
+    # plot_backbone_splits(tree, mode='time', plot_edges=False)#, lw=3.)
+    # plot_tree(tree, color='k', lw=0.02, alpha=0.6)
+    # plt.scatter(tree.location[0], tree.location[1], marker='*', c='k', s=500, zorder=3)
+    # plt.axis('off')
+    # plt.tight_layout(pad=0.)
+    # plt.show()

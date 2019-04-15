@@ -11,8 +11,7 @@ from scipy.stats import norm as normal
 from scipy.spatial import ConvexHull
 from scipy.spatial.qhull import QhullError
 
-from src.tree import Node
-from src.simulation import SimulationBackbone
+from src.tree import Tree
 from src.util import bounding_box, mkpath, grey
 from src.config import *
 
@@ -21,6 +20,11 @@ TAU = 2 * np.pi
 
 ANIM_FOLDER = 'results/simulation_visualizations/animation/'
 PATH_WIDTH = 0.7
+
+
+
+def get_location(node):
+    return node.location
 
 
 def plot_height(node, alpha=.6, color='teal', lw=1.):
@@ -57,30 +61,37 @@ def _plot_tree(node, alpha=1., plot_height=False, color='teal', lw=1.):
             _plot_tree(c, alpha=alpha, plot_height=plot_height, color=color, lw=lw)
 
 
-def plot_edge(parent, child, no_arrow=False, ax=None, **kwargs_arrow):
+def plot_edge(parent, child, no_arrow=False, ax=None,
+              get_node_position=get_location, **kwargs_arrow):
     if ax is None:
         ax = plt.gca()
+    color = kwargs_arrow.pop('color', 'k')
+    alpha = kwargs_arrow.pop('alpha', 1.)
 
-    x, y = parent.location
-    cx, cy = child.location
+    x, y = get_node_position(parent)
+    cx, cy = get_node_position(child)
     if x != cx or y != cy:
         if no_arrow:
-            ax.plot([x, cx], [y, cy], c=kwargs_arrow.get('color', 'k'),
-                     alpha=kwargs_arrow.get('alpha', 1.))
+            return ax.plot([x, cx], [y, cy], c=color, alpha=alpha, **kwargs_arrow)
         else:
-            ax.arrow(x, y, (cx - x), (cy - y), length_includes_head=True, **kwargs_arrow)
+            width = kwargs_arrow.pop('lw', 0.001)
+            return ax.arrow(x, y, (cx - x), (cy - y), length_includes_head=True,
+                            width=width, lw=0, color=color, alpha=alpha)
 
 
-def plot_tree(tree: Node, color_fun=None, alpha_fun=None, cmap=None,
-              cnorm=None, anorm=None, lw=0.1, color='k', alpha=1., no_arrow=False,
-              ax=None):
+def plot_tree(tree: Tree, color_fun=None, alpha_fun=None, cmap=None,
+              cnorm=None, anorm=None, color='k', alpha=1., no_arrow=True,
+              ax=None, lw=None, get_node_position=get_location, show_colorbar=False):
     if cmap is None:
-        cmap = plt.get_cmap('PiYG')
+        cmap = plt.get_cmap('viridis')
 
     if color_fun is not None:
         color_values = [color_fun(*e) for e in tree.iter_edges()]
         if cnorm is None:
-            cnorm = ColorNormalize(vmin=min(color_values), vmax=max(color_values))
+            vmin, vmax = np.quantile(color_values, [0.05, .95])
+            cnorm = plt.Normalize(vmin=vmin, vmax=vmax)
+            # cnorm = ColorNormalize(vmin=min(color_values),
+            #                        vmax=max(color_values))
 
     if alpha_fun is not None:
         alphas = [alpha_fun(*e) for e in tree.iter_edges()]
@@ -95,7 +106,8 @@ def plot_tree(tree: Node, color_fun=None, alpha_fun=None, cmap=None,
         if alpha_fun is not None:
             alpha = anorm(alpha_fun(*edge))
 
-        plot_edge(*edge, color=color, alpha=alpha, width=lw, lw=0, no_arrow=no_arrow, ax=ax)
+        plot_edge(*edge, color=color, alpha=alpha, no_arrow=no_arrow, ax=ax, lw=lw,
+                  get_node_position=get_node_position)
 
     if tree.parent:
         edge = tree.parent, tree
@@ -106,7 +118,13 @@ def plot_tree(tree: Node, color_fun=None, alpha_fun=None, cmap=None,
         if alpha_fun is not None:
             alpha = anorm(alpha_fun(*edge))
 
-        plot_edge(*edge, color=color, alpha=alpha, width=lw, lw=0, no_arrow=no_arrow, ax=ax)
+        plot_edge(*edge, color=color, alpha=alpha, no_arrow=no_arrow, ax=ax, lw=lw,
+                  get_node_position=get_node_position)
+
+    if show_colorbar:
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=cnorm)
+        sm._A = []
+        plt.colorbar(sm)
 
 
 def plot_walk(simulation, show_path=True, show_tree=False, ax=None,
@@ -257,18 +275,20 @@ def circular_histogram(x, bins=50, range=(0, TAU), weights=None, ax=None, label=
 
 
 def plot_rrw_step_pdf(lognormal_mean=1., n_samples=30000):
-    xmax = 1.
-    x = np.linspace(-xmax, xmax, 2000)
-    plt.plot(x, normal.pdf(x, scale=0.1), label='Normal(0, 0.1)')
+    xmax = 10.
+    x = np.linspace(-xmax, xmax, 1000)
+    # plt.plot(x, normal.pdf(x, scale=0.1), label='Normal(0, 0.1)')
+    plt.plot(x, normal.pdf(x, scale=1.), label='Normal(0, 0.1)')
     # plt.plot(x, laplace.pdf(x, scale=0.1), label='Laplace(0, 0.1)')
 
-    # for lognormal_stdev in 3**np.linspace(-2, 1, 4):
-    for lognormal_stdev in [3.]:
+    lognormal_stdev = .5
+    for lognormal_mean in [0.001, 0.1, 1.]:
         normal_stdev = np.random.lognormal(lognormal_mean, lognormal_stdev, size=n_samples)
         def step_pdf(x):
             return np.mean(normal.pdf(x[:, None], scale=normal_stdev[None, :]), axis=1)
 
-        plt.plot(x, step_pdf(x), label='RRW (s=%.1f)' % lognormal_stdev)
+        # plt.plot(x, step_pdf(x), label='RRW (s=%.1f)' % lognormal_stdev)
+        plt.plot(x, step_pdf(x), label='RRW (mu=%.1f)' % lognormal_mean)
 
     ax = plt.gca()
     ax.set_xlim([-xmax, xmax])
@@ -277,14 +297,18 @@ def plot_rrw_step_pdf(lognormal_mean=1., n_samples=30000):
     plt.tight_layout(pad=0)
     plt.show()
 
-def plot_hpd(tree, p_hpd, location_key='location', **kwargs_plt):
+def plot_hpd(tree, p_hpd, location_key='location', projection=None, **kwargs_plt):
     kwargs_plt.setdefault('color', COLOR_ROOT_EST)
     kwargs_plt.setdefault('alpha', 0.2)
     kwargs_plt.setdefault('zorder', 1)
 
     for polygon in tree.get_hpd(p_hpd, location_key=location_key):
-        x, y = polygon.exterior.xy
-        plt.fill(x, y, **kwargs_plt)
+        xy = polygon.exterior.xy
+        print(xy)
+        if projection is not None:
+            xy = projection(xy.T).T
+            print('Projected:', xy)
+        plt.fill(*xy, **kwargs_plt)
 
 
 def plot_root(root, color=COLOR_ROOT_EST, s=500, **kwargs):
@@ -292,7 +316,7 @@ def plot_root(root, color=COLOR_ROOT_EST, s=500, **kwargs):
                        zorder=5, **kwargs)
 
 def plot_backbone(simulation):
-    assert isinstance(simulation, SimulationBackbone)
+    assert isinstance(simulation, 'SimulationBackbone')
     assert hasattr(simulation, 'backbone_steps')
 
     parent = simulation.root
@@ -376,80 +400,87 @@ def plot_mean_and_std(x, y_mean, y_std, color='blue', label=None):
                      color=color, alpha=0.05, zorder=0)
 
 
-def plot_backbone_splits(tree: Node, mode='geo', plot_edges=True, lw=0.1, n_clades=10, bb_side=1,
+def plot_clades(tree, min_clade_size=5, max_clade_size=50, _i=0):
+    if tree.is_leaf():
+        plt.scatter(*tree.location, c='k')
+        return _i
+
+    size = tree.n_leafs()
+    if min_clade_size < size < max_clade_size:
+        plot_tree(tree, color=COLORS[_i])  #, alpha=0.2)
+        plot_tree_hull(tree, COLORS[_i])
+        return _i + 1
+    else:
+        for c in tree.children:
+            plot_edge(tree, c)
+            _i = plot_clades(c, min_clade_size=min_clade_size,
+                             max_clade_size=max_clade_size,_i=_i)
+
+        return _i
+
+
+def plot_backbone_splits(tree, plot_edges=True, lw=0.1, n_clades=10, bb_side=1,
                          plot_hull=True):
     # SUBGROUP_COLOR_IDXS = [0, 1, 1, 1, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     # SUBGROUP_COLORS = [COLORS[i] for i in SUBGROUP_COLOR_IDXS]
     SUBGROUP_COLORS = COLORS
 
-    if mode=='time':
-        from src.util import transform_tree_coordinates, time_drift_trafo
-        transform_tree_coordinates(tree, time_drift_trafo)
-
     p = tree
     for i in range(n_clades):
-        c_backbone = p.children[bb_side]
-        c_subgroup = p.children[1-bb_side]
+        c_backbone = p.big_child()
+        c_subgroup = p.small_child()
+        while c_subgroup.tree_size() < 10:
+            print('Subgroup Size:', c_subgroup.tree_size(), '--> skipped')
+            if plot_edges:
+                plot_tree(c_subgroup, color=grey(0.5), lw=lw)
+            plot_edge(p, c_backbone, no_arrow=True, lw=30*lw, color='k', zorder=3)
+            p = c_backbone
+            c_backbone = p.big_child()
+            c_subgroup = p.small_child()
+        print('Subgroup Size:', c_subgroup.tree_size())
 
-        # if mode == 'geo':
+
+
         if plot_edges:
             plot_tree(c_subgroup, color=SUBGROUP_COLORS[i], lw=lw)
 
-        plot_edge(p, c_backbone, no_arrow=True, width=2*lw, lw=1.,
-                  facecolor='k', edgecolor=grey(.95),
-                  zorder=3)
+        plot_edge(p, c_backbone, no_arrow=True, lw=30*lw, color='k', zorder=3)
         if plot_hull:
             plot_tree_hull(c_subgroup, c=SUBGROUP_COLORS[i])
 
-        # elif mode == 'time':
-        #     x, y = p.location
-        #     cx, cy = c_backbone.location
-        #
-        #     x = 0.877 * x - 0.479 * y
-        #     cx = 0.877 * cx - 0.479 * cy
-        #     y = -p.height
-        #     cy = -c_backbone.height
-        #
-        #     plot_height(c_subgroup, color=SUBGROUP_COLORS[i], lw=lw)
-        #     plt.plot([x, cx], [y, cy], 'k', lw=1.5*lw)
-
         p = c_backbone
 
-    # if mode == 'geo':
+    # # if mode == 'geo':
     if plot_edges:
         plot_tree(p, color=SUBGROUP_COLORS[n_clades], lw=lw)
     if plot_hull:
         plot_tree_hull(p, c=SUBGROUP_COLORS[n_clades])
-    # elif mode == 'time':
-    #     plot_height(p, color=SUBGROUP_COLORS[n_clades], lw=lw)
 
 
-def plot_subtree_hulls(tree: Node):
-    tree = tree.children[1]
-    tree = tree.children[1]
+def plot_subtree_hulls(tree: Tree):
     for i in range(4):
         c = COLORS[i]
         plot_tree_hull(tree, c=c)
         plot_root(tree.location, color=c, edgecolor=grey(1.))
 
-        tree = tree.children[1]
-        tree = tree.children[1]
-        tree = tree.children[1]
+        tree = tree.big_child()
+        tree = tree.big_child()
+        tree = tree.big_child()
 
 
-def plot_tree_hull(tree: Node, c=None):
+def plot_tree_hull(tree, c=None):
     leafs = np.array([l.location for l in tree.iter_descendants()])
     try:
         hull = ConvexHull(leafs)
     except QhullError:
         return
 
-    plot_hull_area(hull, leafs, c=c, alpha=0.2, lw=0)
-    # plot_hull_lines(hull, leafs, c='k')
+    plot_hull_area(hull, leafs, c=c, alpha=0.4, lw=0)
+    plot_hull_lines(hull, leafs, c='k')
 
     leafs = np.array([l.location for l in tree.iter_leafs()])
     plt.scatter(*leafs.T, c=c, edgecolor='k', lw=0.5, zorder=2)
-    plot_root(tree.location, color=c, edgecolor=grey(1.))
+    # plot_root(tree.location, color=c, edgecolor=grey(1.))
 
 
 def plot_hull_lines(hull, locs, c=None):

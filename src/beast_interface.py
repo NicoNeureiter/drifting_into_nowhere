@@ -6,7 +6,7 @@ import subprocess
 import logging
 
 from src.beast_xml_templates import *
-from src.tree import Node
+from src.tree import Tree
 from src.util import str_concat_array, extract_newick_from_nexus, SubprocessException, mkpath
 
 BEAST_LOGGER_PATH = 'logs/beast.log'
@@ -128,7 +128,7 @@ def load_tree_from_nexus(tree_path, location_key='location'):
     with open(tree_path, 'r') as tree_file:
         nexus_str = tree_file.read()
         newick_str = extract_newick_from_nexus(nexus_str)
-        tree = Node.from_newick(newick_str, location_key=location_key)
+        tree = Tree.from_newick(newick_str, location_key=location_key)
 
     return tree
 

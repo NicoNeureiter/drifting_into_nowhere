@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 
-from src.tree import Node
+from src.tree import Tree, get_edge_heights
 from src.util import mkpath
 
 
@@ -38,7 +38,7 @@ def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
     with open(NEWICK_TREE_PATH, 'r') as tree_file:
         tree_str = tree_file.read()
 
-    tree = Node.from_newick(tree_str.strip())
+    tree = Tree.from_newick(tree_str.strip())
     tree.load_locations_from_csv(LOCATIONS_PATH, swap_xy=True)
 
     if exclude_outgroup:
@@ -54,6 +54,7 @@ def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import geopandas as gpd
+
     from src.beast_interface import run_beast, run_treeannotator, load_tree_from_nexus
     from src.plotting import plot_hpd, plot_root, plot_tree, plot_height, plot_edge
     from src.util import grey
@@ -75,7 +76,6 @@ if __name__ == '__main__':
         model=MODEL, og=USE_OUTGROUP, at=ADAPT_TREE, ah=ADAPT_HEIGHT, hpd=HPD,
         fixroot='_fixroot' if FIX_ROOT else ''
     )
-    SCRIPT_PATH = 'src/beast_pipeline.sh'
     BANTU_XML_PATH = WORKING_DIR + 'nowhere.xml'
     GEOJSON_PATH = 'africa.geojson'
     GEO_TREE_PATH = WORKING_DIR + 'nowhere.tree'
@@ -111,7 +111,8 @@ if __name__ == '__main__':
     world = gpd.read_file('data/naturalearth_50m_wgs84.geojson')
     ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.4, )
 
-    from src.analyze_tree import flatten, invert, get_edge_heights
+    from src.analyze_tree import flatten, invert
+
     plot_tree(tree, lw=LW, color='k')
               # cmap=cmap, color_fun=flatten(invert(get_edge_heights), .7))
     root = tree.location

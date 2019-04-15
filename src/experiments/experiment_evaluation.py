@@ -12,7 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 # from joblib import Parallel, delayed
 
-from src.config import COLORS
+from src.config import _COLORS
 from src.simulation import Simulation
 from src.beast_interface import (run_beast, run_treeannotator)
 from src.plotting import plot_mean_and_std
@@ -222,7 +222,7 @@ def plot_experiment_results(results, x_name='Total Drift', xscale='linear'):
     # Plot the mean L2-Errors +/- standard deviation
     plt.scatter(*l2_error_scatter.T, c='lightgrey')
     plt.plot(x_values, x_values, c='k', lw=0.4)
-    plot_mean_and_std(x_values, l2_errors_mean, l2_errors_std, color=COLORS[0],
+    plot_mean_and_std(x_values, l2_errors_mean, l2_errors_std, color=_COLORS[0],
                       label=r'Average L2-error of reconstructed root')
 
     plt.xscale(xscale)
@@ -235,8 +235,8 @@ def plot_experiment_results(results, x_name='Total Drift', xscale='linear'):
     # Plot a curve and
     for i, (p, coverage) in enumerate(coverage_stats.items()):
         plt.plot(x_values, coverage,
-                 c=COLORS[i], label='%i%% HPD coverage' % p)
-        plt.axhline(p/100, c=COLORS[i], ls='--', alpha=0.3)
+                 c=_COLORS[i], label='%i%% HPD coverage' % p)
+        plt.axhline(p / 100, c=_COLORS[i], ls='--', alpha=0.3)
 
     plt.xscale(xscale)
     plt.legend()

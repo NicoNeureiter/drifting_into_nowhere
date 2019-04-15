@@ -7,7 +7,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 
-from src.tree import Node
+from src.tree import Tree
 from src.util import mkpath, extract_newick_from_nexus
 
 NEWICK_TREE_PATH = 'data/ie/IE_2MCCs.tree'
@@ -20,9 +20,9 @@ def write_ie_xml(xml_path, chain_length):
         nexus_str = tree_file.read()
         newick_str = extract_newick_from_nexus(nexus_str)
 
-    tree = Node.from_newick(newick_str, location_key=LOCATION_KEY)
+    tree = Tree.from_newick(newick_str, location_key=LOCATION_KEY)
 
-    tree = tree.get_subtree([0, 0, 0, 0])
+    # tree = tree.get_subtree([0, 0, 0, 0])
 
     tree.write_beast_xml(xml_path, chain_length, root=None)
 
@@ -41,7 +41,7 @@ def plot_lingo_geo_distances():
         nexus_str = tree_file.read()
         newick_str = extract_newick_from_nexus(nexus_str)
 
-    tree = Node.from_newick(newick_str, location_key=LOCATION_KEY)
+    tree = Tree.from_newick(newick_str, location_key=LOCATION_KEY)
 
     tree.load_alignment_from_csv(ALIGNMENT_PATH)
 
@@ -73,7 +73,15 @@ def plot_lingo_geo_distances():
     plt.show()
 
 
+def swap_xy(tree):
+    for node in tree.iter_descendants():
+        if node.location is not None:
+            node.location = node.location[::-1]
+
 if __name__ == '__main__':
+    from src.plotting import plot_clades, plot_tree
+    from workbench.map_projections import WorlMap
+
     CHAIN_LENGTH = 200000
     BURNIN = 5000
     HPD = 80
@@ -83,20 +91,41 @@ if __name__ == '__main__':
     GEOJSON_PATH = 'world.geojson'
     GEO_TREE_PATH = 'data/ie/nowhere.tree'
 
-    mkpath(IE_XML_PATH)
+
+    with open(NEWICK_TREE_PATH, 'r') as tree_file:
+        nexus_str = tree_file.read()
+        newick_str = extract_newick_from_nexus(nexus_str)
+
+    tree = Tree.from_newick(newick_str, location_key=LOCATION_KEY)
+
+    swap_xy(tree)
+
+    locations = tree.get_descendant_locations()
+    world_map = WorlMap()
+    world_map.align_to_data(locations)
+    ax = world_map.plot()
+
+    for node in tree.iter_descendants():
+        node.location = world_map.project(node.location)
+
+    plot_tree(tree)
+    plot_clades(tree, min_clade_size=3, max_clade_size=20)
+    plt.show()
+
+    # mkpath(IE_XML_PATH)
 
     # plot_lingo_geo_distances()
 
-    write_ie_xml(IE_XML_PATH, CHAIN_LENGTH)
-
-    # Run the BEAST analysis + summary of results (treeannotator)
-    os.system('bash {script} {hpd} {burnin} {cwd} {geojson}'.format(
-        script=SCRIPT_PATH,
-        hpd=HPD,
-        burnin=BURNIN,
-        cwd=os.getcwd()+'/data/ie/',
-        geojson=GEOJSON_PATH
-    ))
+    # write_ie_xml(IE_XML_PATH, CHAIN_LENGTH)
+    #
+    # # Run the BEAST analysis + summary of results (treeannotator)
+    # os.system('bash {script} {hpd} {burnin} {cwd} {geojson}'.format(
+    #     script=SCRIPT_PATH,
+    #     hpd=HPD,
+    #     burnin=BURNIN,
+    #     cwd=os.getcwd()+'/data/ie/',
+    #     geojson=GEOJSON_PATH
+    # ))
 
     # # Evaluate the results
     # okcool = check_root_in_hpd(GEO_TREE_PATH, HPD, root=IE_ROOT)

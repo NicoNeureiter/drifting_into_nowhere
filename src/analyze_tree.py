@@ -4,14 +4,12 @@ from __future__ import absolute_import, division, print_function, \
     unicode_literals
 from math import atan2
 
-import numpy as np
-import matplotlib.pyplot as plt
 import geopandas as gpd
 
-from src.tree import Node
-from src.util import norm, normalize, grey, extract_newick_from_nexus
+from src.tree import angle_to_vector, get_edge_diff_rate
+from src.util import norm, normalize, extract_newick_from_nexus
 from src.plotting import *
-from src.config import PINK, TURQUOISE, COLORS
+from src.config import PINK, TURQUOISE
 
 
 def get_edge_drift_agreement(parent, child):
@@ -23,28 +21,12 @@ def get_edge_drift_agreement(parent, child):
     return direction.dot(DRIFT_DIRECTION)
 
 
-def get_edge_diff_rate(parent, child):
-    step = child.location - parent.location
-    diff_rate = norm(step) / child.length
-    return diff_rate
-
-
-def get_edge_heights(parent, child):
-    return (parent['height'] + child['height']) / 2.
-
-def get_old_edges(parent, child, threshold=250.):
-    return (parent['height'] + child['height']) / 2. > threshold
-
-def angle_to_vector(angle):
-    return np.array([np.cos(angle), np.sin(angle)])
-
-
 N_BINS = 28
 COLOR_1 = (0.1, 0.6, 0.75)
 COLOR_2 = (0.5, 0.1, 0.4)
 
 
-def plot_early_late_drift(tree: Node):
+def plot_early_late_drift(tree: Tree):
     halftime = tree['height'] / 2
 
     angles_early = []
@@ -82,7 +64,7 @@ def plot_early_late_drift(tree: Node):
     return ax
 
 
-def plot_global_local_drift(tree: Node):
+def plot_global_local_drift(tree: Tree):
     angles = []
     lengths = []
     angles_from_root = []
@@ -153,10 +135,10 @@ if __name__ == '__main__':
         # TREE_PATH = 'data/bantu_brownian_without_outgroup/nowhere.tree'
 
         PLOT_DRIFT_LEGEND = 0
-        PLOT_TREE = 1
+        PLOT_TREE = 0
         PLOT_HPD = 0
         PLOT_ROOT = 0
-        PLOT_HOMELAND = 1
+        PLOT_HOMELAND = 0
         PLOT_TIPS = 0
 
     elif FAMILY == 'ie':
@@ -171,8 +153,8 @@ if __name__ == '__main__':
         YLIM = (0, 75)
         DRIFT_ANGLE = 2.8
         DRIFT_DIRECTION = angle_to_vector(DRIFT_ANGLE)
-        LW = 0.12
-        HPD = 80
+        LW = .12
+        HPD = 60
 
         PLOT_DRIFT_LEGEND = False
         PLOT_TREE = True
@@ -188,15 +170,17 @@ if __name__ == '__main__':
     world = gpd.read_file('data/naturalearth_50m_wgs84.geojson')
     # world = gpd.read_file('data/ne_50m_admin_0_countries.geojson')
 
-    ax = world.plot(color=grey(.05), edgecolor=grey(0.05), lw=.4, )
-    cmap = plt.get_cmap('viridis')
+    ax = world.plot(color=grey(.9),
+                    edgecolor=grey(0.4), lw=.33, )
+    # cmap = plt.get_cmap('viridis')
+    cmap = plt.get_cmap('jet')
     # 'viridis', 'inferno', 'plasma', 'gnuplot', 'PiYG', 'RdYlGn',
 
     # Load Tree
     with open(TREE_PATH, 'r') as tree_file:
         nexus_str = tree_file.read()
         newick_str = extract_newick_from_nexus(nexus_str)
-        tree = Node.from_newick(newick_str, location_key=LOCATION_KEY, swap_xy=swap_xy)
+        tree = Tree.from_newick(newick_str, location_key=LOCATION_KEY, swap_xy=swap_xy)
         # tree = tree.get_subtree([0, 0, 0, 0])
 
         okcool = tree.root_in_hpd(HOMELAND, HPD)
@@ -204,16 +188,19 @@ if __name__ == '__main__':
 
     # Plot Tree
     if PLOT_TREE:
-        plot_tree(tree, # cmap=cmap,
-                  # color_fun=flatten(invert(get_edge_heights), 1.),
-                  color='orange',
-                  # color_fun=get_edge_drift_agreement,
-                  alpha_fun=flatten(get_edge_heights, .9),
-                  lw=LW)
+        # plot_tree(tree, cmap=cmap,
+        #           color_fun=flatten(invert(get_edge_heights), 1.),
+        #           # color='darkblue',
+        #           # color_fun=get_edge_drift_agreement,
+        #           # alpha_fun=flatten(get_edge_heights, .9),
+        #           lw=2., no_arrow=False)
 
-        # plot_backbone_splits(tree, plot_edges=False, lw=LW)
+        # plot_backbone_splits(tree, plot_edges=True, lw=LW)
+        plot_tree(tree, lw=3., color_fun=get_edge_diff_rate, cmap=cmap)
+        # plot_clades(tree, max_clade_size=50)
         # plot_subtree_hulls(tree)
-        # plot_tree(tree, color='k', lw=0.05)
+
+
 
     if PLOT_HPD:
         okcool = plot_hpd(tree, HPD, color=PINK)
@@ -252,11 +239,18 @@ if __name__ == '__main__':
     plt.axis('off')
     plt.tight_layout(pad=0.)
     plt.show()
+    exit()
 
     # # Plot backbone-splits over time.
-    # plot_backbone_splits(tree, mode='time', plot_edges=False)#, lw=3.)
-    # plot_tree(tree, color='k', lw=0.02, alpha=0.6)
+    # plot_backbone_splits(tree, plot_edges=False)#, lw=3.)
+    def get_space_time_position(node):
+        t = -node.height
+        x = np.dot(node.location, DRIFT_DIRECTION)
+        return x, t
+
+    plot_tree(tree, lw=2.5, alpha=0.6, get_node_position=get_space_time_position,
+              cmap=None, color_fun=get_edge_diff_rate)
     # plt.scatter(tree.location[0], tree.location[1], marker='*', c='k', s=500, zorder=3)
-    # plt.axis('off')
-    # plt.tight_layout(pad=0.)
-    # plt.show()
+    plt.axis('off')
+    plt.tight_layout(pad=0.)
+    plt.show()

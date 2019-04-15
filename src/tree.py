@@ -7,22 +7,23 @@ import logging
 import numpy as np
 
 from src.util import (remove_whitespace, find, read_locations_file,
-                      read_alignment_file, StringTemplate, str_concat_array)
+                      read_alignment_file, StringTemplate, str_concat_array, norm)
 from src.beast_xml_templates import *
 from shapely.geometry import Point, Polygon
 
 
-class Node(object):
+class Tree(object):
 
-    """Node class with children, to recursively define a tree, and a set of attributes.
+    """Tree node class with children, to recursively define a tree, and a set of attributes.
 
     Attributes:
-        length (float): The branch length of the edge leading to the node.
-        name (str): The name of the node (often empty for internal nodes).
-        children (List[Node]): Children of this node.
-        parent (Node): Paren node (None for the root of a tree).
+        length (float): The branch length of the edge leading to the treee node.
+        name (str): The name of the current node (often empty for internal nodes).
+        children (List[Tree]): Children of this node.
+        parent (Tree): Paren node (None for the root of a tree).
         attributes (dict): A dictionary of additional custom attributes.
-        location_attribute (str): Defines the ´attributes´ dict-key for the location attribute.
+        _location (np.array or iterable or None): The private attribute for the
+            geo-location (accessed via property `Tree.location`).
     """
 
     def __init__(self, length, name='', children=None, parent=None,
@@ -66,6 +67,8 @@ class Node(object):
         # self._alignment = np.asarray(alignment)
         self._alignment = alignment
 
+    # TODO turn into getter (it's not O(1))
+    # TODO caching?
     @property
     def height(self):
         if self.parent is None:
@@ -92,6 +95,18 @@ class Node(object):
         self.children.append(child)
         child.parent = self
 
+    def get_descendant_locations(self):
+        return np.array([node.location for node in self.iter_descendants()])
+
+    def get_leaf_locations(self):
+        return np.array([node.location for node in self.iter_leafs()])
+
+    def small_child(self):
+        return min(self.children, key=self.__class__.tree_size)
+
+    def big_child(self):
+        return max(self.children, key=self.__class__.tree_size)
+
     def set_attribute_type(self, key, Type):
         self.attributes[key] = Type(self.attributes[key])
         for child in self.children:
@@ -103,18 +118,18 @@ class Node(object):
             child.set_location_attribute(location_attribute)
 
     @staticmethod
-    def from_newick(newick, location_key='location', swap_xy=False):
+    def from_newick(newick, location_key='location', swap_xy=False, with_attributes=True):
         """Create a tree from the Newick representation.
 
         Args:
             newick (str): Newick tree.
 
         Returns:
-            Node: The parsed tree.
+            Tree: The parsed tree.
         """
-        newick = remove_whitespace(newick)
+        newick = remove_whitespace(newick).lower()
 
-        hpd_pattern = r'%HPD_1={'
+        hpd_pattern = r'%hpd_1={'
         p_hpd = None
         if hpd_pattern in newick:
             before_pattern, _, _ = newick.partition(hpd_pattern)
@@ -122,11 +137,12 @@ class Node(object):
             assert len(p_hpd_str) in [1, 2]
             p_hpd = int(p_hpd_str)
 
-        node, _ = parse_node(newick, location_key=location_key, swap_xy=swap_xy)
+        tree, _ = parse_tree(newick, location_key=location_key, swap_xy=swap_xy,
+                             with_attributes=with_attributes)
         if p_hpd is not None:
-            node.p_hpd = p_hpd
+            tree.p_hpd = p_hpd
 
-        return node
+        return tree
 
     def get_location_from_attributes(self, location_key='location'):
         """Extract the location from the attributes dict (if present) and return
@@ -136,7 +152,7 @@ class Node(object):
             location_key (str): the suffix of the dictionary key for the location
                 in the attributes dictionary.
         Returns:
-            np.array or None: The extracted locations of the node.
+            np.array or None: The extracted location of the node.
         """
         location_key += '%i'
         location_median_key = location_key + '_median'
@@ -155,7 +171,7 @@ class Node(object):
     def get_hpd(self, p_hpd, location_key='location'):
         """Extract the HPD from the attributes dict."""
         attr_keys = list(self.attributes.keys())
-        hpd_key_template = '{location_key}{i_axis}_{p_hpd}%HPD_{i_polygon}'
+        hpd_key_template = '{location_key}{i_axis}_{p_hpd}%hpd_{i_polygon}'
         hpd_key_template = hpd_key_template.format(location_key=location_key,
                                                    p_hpd=p_hpd,
                                                    i_axis='{i_axis}',
@@ -165,6 +181,8 @@ class Node(object):
         hpd_key_x = hpd_key_template.format(i_axis=1, i_polygon=i)
         hpd_key_y = hpd_key_template.format(i_axis=2, i_polygon=i)
         polygons = []
+        print(attr_keys)
+        print(hpd_key_x, hpd_key_y)
         while hpd_key_x in attr_keys:
             hpd_x_str = self.attributes[hpd_key_x][1:-1]
             hpd_y_str = self.attributes[hpd_key_y][1:-1]
@@ -177,6 +195,9 @@ class Node(object):
             i += 1
             hpd_key_x = hpd_key_template.format(i_axis=1, i_polygon=i)
             hpd_key_y = hpd_key_template.format(i_axis=2, i_polygon=i)
+
+        if len(polygons) == 0:
+            logging.warning('No HPD polygon found!')
 
         return polygons
 
@@ -253,7 +274,7 @@ class Node(object):
 
         return '{core}{attrs}:{len}'.format(core=core, attrs=attr_str, len=self.length)
 
-    def copy_other_node(self, other: 'Node'):
+    def copy_other_node(self, other):
         # TODO Iterate over attrs?
         self.name = other.name
         self.length = other.length
@@ -275,10 +296,10 @@ class Node(object):
         return FEATURES_TEMPLATE.format(id=self.name, features=alignment_str)
 
     def _format_tree_locations(self):
-        return ''.join(map(Node._format_location, self.iter_leafs()))
+        return ''.join(map(Tree._format_location, self.iter_leafs()))
 
     def _format_tree_alignments(self):
-        return ''.join(map(Node._format_alignment, self.iter_leafs()))
+        return ''.join(map(Tree._format_alignment, self.iter_leafs()))
 
     def write_beast_xml(self, output_path, chain_length, root=None,
                         movement_model='rrw', diffusion_on_a_sphere=False,
@@ -339,9 +360,20 @@ class Node(object):
         for node in self.iter_descendants():
             if node.name in alignments:
                 node.alignment = alignments[node.name]
-                print(node.name, node.alignment)
             else:
                 logging.warning('No alignment found for node "%s"' % node.name)
+
+    def binarize(self):
+        # Ensure that self has at most 2 children
+        if len(self.children) > 2:
+            new_grandchildren = self.children[1:]
+            new_child = Tree(0, children=new_grandchildren, parent=self,
+                             attributes=self.attributes, location=self.location,
+                             alignment=self.alignment)
+            self.children = [self.children[0], new_child]
+
+        for c in self.children:
+            c.binarize()
 
     def iter_descendants(self):
         yield self
@@ -358,11 +390,11 @@ class Node(object):
         return self.attributes[key]
 
     def __repr__(self):
-        return 'node_' + self.name
+        return self.name
 
 
-def node_imbalance(node: Node):
-    assert len(node.children) <= 2
+def node_imbalance(node: Tree):
+    assert len(node.children) <= 2, node.children
     if len(node.children) < 2:
         return 0
     if node.tree_size() < 4:
@@ -371,7 +403,7 @@ def node_imbalance(node: Node):
     c1, c2 = node.children
 
     size = node.tree_size()
-    bigger = max(c1.tree_size, c2.tree_size)
+    bigger = max(c1.tree_size(), c2.tree_size())
     m = np.ceil(size / 2)
 
     return (bigger - m) / (size - m - 1)
@@ -380,20 +412,19 @@ def node_imbalance(node: Node):
 def tree_imbalance(root):
     # TODO: According to (Purvis and Agapow 2002) we should use a weighted mean
     # "Purvis and Agapow: Phylogeny imbalance and taxonomic level"
-
-    node_imbalances = [node_imbalance(n) for n in root.iter_nodes()]
+    node_imbalances = [node_imbalance(n) for n in root.iter_descendants()]
     return np.mean(node_imbalances)
 
 
-def parse_node(s, location_key='location', swap_xy=False):
-    """Parse a string in Newick format into a Node object. The Newick string
+def parse_tree(s, location_key='location', swap_xy=False, with_attributes=True):
+    """Parse a string in Newick format into a Tree object. The Newick string
     might be partially parsed already, i.e. a suffix of a full Newick tree.
 
     Args:
         s (str): The (partial) Newick string to be parsed.
 
     Returns:
-        Node: The parsed Node object.
+        Tree: The parsed Tree object.
         str: The remaining (unparsed) Newick string.
     """
     name = ''
@@ -404,28 +435,46 @@ def parse_node(s, location_key='location', swap_xy=False):
         # Parse children
         while s.startswith('(') or s.startswith(','):
             s = s[1:]
-            child, s = parse_node(s, location_key=location_key, swap_xy=swap_xy)
+            child, s = parse_tree(s, location_key=location_key, swap_xy=swap_xy,
+                                  with_attributes=with_attributes)
             children.append(child)
 
         assert s.startswith(')'), '"%s"' % s
         s = s[1:]
 
+        if not s[0] in ':[);':
+            if with_attributes:
+                name_stop = min(find(s, '['), find(s, ':'))
+            else:
+                name_stop = find(s, ':')
+
+            name = s[:name_stop]
+            s = s[name_stop:]
+
+
     else:
         """Parse leaf node"""
-        name_stop = min(find(s, '['), find(s, ':'))
+        if with_attributes:
+            name_stop = min(find(s, '['), find(s, ':'))
+        else:
+            name_stop = find(s, ':')
+
         name = s[:name_stop]
         s = s[name_stop:]
 
-    attributes, s = parse_attributes(s)
+    if with_attributes:
+        attributes, s = parse_attributes(s)
+    else:
+        attributes = None
 
     length, s = parse_length(s)
-    node = Node(length, name=name, children=children, attributes=attributes)
+    tree = Tree(length, name=name, children=children, attributes=attributes)
 
-    node._location = node.get_location_from_attributes(location_key)
+    tree._location = tree.get_location_from_attributes(location_key)
     if swap_xy:
-        node._location = node._location[::-1]
+        tree._location = tree._location[::-1]
 
-    return node, s
+    return tree, s
 
 
 def parse_attributes(s):
@@ -454,7 +503,7 @@ def parse_length(s):
     if s.startswith(';'):
         return 0., s
 
-    assert s.startswith(':')
+    assert s.startswith(':'), (len(s), s)
     s = s[1:]
 
     end = min(find(s, ','), find(s, ')'))
@@ -502,7 +551,7 @@ def test_parse_attributes():
 def test_newick():
     s = '\t(A[&name = a]:1.2, (B[&name=b]:3.4,C[&tmp=x, name=c]:5.6)[&name=internal]:7.8)[&name=root];\n'
 
-    root = Node.from_newick(s)
+    root = Tree.from_newick(s)
 
     assert len(root.children) == 2
     a, internal = root.children
@@ -530,6 +579,7 @@ def test_newick():
 
     print('Test SUCCESSFUL: parse_newick')
 
+
 def test_tree_imbalance():
     pass
 
@@ -538,3 +588,21 @@ if __name__ == '__main__':
     test_parse_length()
     test_parse_attributes()
     test_newick()
+
+
+def get_edge_heights(parent, child):
+    return (parent.height + child.height) / 2.
+
+
+def get_old_edges(parent, child, threshold=250.):
+    return (parent.height + child.height) / 2. > threshold
+
+
+def angle_to_vector(angle):
+    return np.array([np.cos(angle), np.sin(angle)])
+
+
+def get_edge_diff_rate(parent, child):
+    step = child.location - parent.location
+    diff_rate = norm(step) / child.length
+    return diff_rate

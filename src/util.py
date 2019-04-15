@@ -5,8 +5,11 @@ from __future__ import absolute_import, division, print_function, \
 import os
 import csv
 import logging
+import random
 import random as _random
 import pickle
+import shutil
+import datetime
 
 import numpy as np
 
@@ -189,16 +192,14 @@ def str_concat_array(a):
 
 def extract_tree_line(nexus):
     for line in nexus.split('\n'):
-        line = line.strip()
+        line = str.lower(line.strip())
         if line.startswith('tree '):
             return line
 
 
 def extract_newick_from_nexus(nexus):
     tree_line = extract_tree_line(nexus)
-    _, tree_name, _, _, newick = tree_line.split()
-
-    return newick
+    return tree_line.split()[-1]
 
 
 def transform_tree_coordinates(tree, trafo):
@@ -209,8 +210,55 @@ def transform_tree_coordinates(tree, trafo):
 def time_drift_trafo(node):
     x, y = node.location
     # drft = 0.877 * x - 0.479 * y
-    return x, -node.height
+    # return x, -node.height
+    return node.height, y  # + 0.2*x
+
+
+def unit_vector(rad):
+    return np.array([
+        np.cos(rad),
+        np.sin(rad)
+    ])
+
+
+def mean_angle(radians):
+    vectors = unit_vector(radians)
+    vector_sum = np.sum(vectors, axis=1)
+    return np.arctan2(vector_sum[1], vector_sum[0])
+
+
+def deg2rad(deg):
+    return np.pi * deg / 180.
+
+
+def rad2deg(rad):
+    return 180. * rad / np.pi
 
 
 class SubprocessException(Exception):
     pass
+
+
+def experiment_preperations(work_dir):
+    # Ensure working directory exists
+    now = datetime.datetime.now()
+    exp_dir = os.path.join(work_dir, 'experiment_logs_%s/' % now)
+    mkpath(exp_dir)
+
+    # Safe state of current file and config to the experiment folder
+    shutil.copy(__file__, exp_dir)
+    shutil.copy('src/config.py', exp_dir)
+
+    # Generate random seed
+    seed = random.randint(0, 1e9)
+
+    # Set it in built-in random and numpy.random
+    random.seed(seed)
+    np.random.seed(seed)
+
+    # Print and write the seed to a file.
+    print('Random seed:', seed)
+    with open(os.path.join(exp_dir, 'seed'), 'w') as seed_file:
+        seed_file.write(str(seed))
+
+    return exp_dir

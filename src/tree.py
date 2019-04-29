@@ -376,6 +376,10 @@ class Tree(object):
             c.binarize()
 
     def iter_descendants(self):
+        """Iterate over all nodes in the tree.
+        Returns:
+            Generator[Tree]: Yields each node of the tree in depth-first order.
+        """
         yield self
         for c in self.children:
             yield from c.iter_descendants()

@@ -136,8 +136,8 @@ class VectorState(State):
         child_name = self._name + i
         child = VectorState(self.world, self.location.copy(), self.step_mean.copy(),
                             self.step_cov.copy(), self.clock_rate, self.birth_rate,
-                            drift_frequency=self.drift_frequency,
-                            location_history=self.location_history.copy(), parent=self,
+                            drift_frequency=self.drift_frequency, parent=self,
+                            # location_history=self.location_history.copy(),
                             name=child_name, age=self.age)
 
         return child

@@ -7,11 +7,12 @@ import math as _math
 import numpy as np
 from matplotlib import pyplot as plt, animation as animation
 from matplotlib.colors import Normalize as ColorNormalize
-from scipy.stats import norm as normal
+from scipy.stats import norm as normal, laplace
 from scipy.spatial import ConvexHull
 from scipy.spatial.qhull import QhullError
 
 from src.tree import Tree
+from src.simulation.simulation import State
 from src.util import bounding_box, mkpath, grey
 from src.config import *
 
@@ -79,7 +80,7 @@ def plot_edge(parent, child, no_arrow=False, ax=None,
                             width=width, lw=0, color=color, alpha=alpha)
 
 
-def plot_tree(tree: Tree, color_fun=None, alpha_fun=None, cmap=None,
+def plot_tree(tree, color_fun=None, alpha_fun=None, cmap=None,
               cnorm=None, anorm=None, color='k', alpha=1., no_arrow=True,
               ax=None, lw=None, get_node_position=get_location, show_colorbar=False):
     if cmap is None:
@@ -127,40 +128,57 @@ def plot_tree(tree: Tree, color_fun=None, alpha_fun=None, cmap=None,
         plt.colorbar(sm)
 
 
-def plot_walk(simulation, show_path=True, show_tree=False, ax=None,
-              savefig=None, alpha=0.3, plot_root=True):
+def plot_walk(tree, show_tree=False, show_root=True, show_tips=True,
+              ax=None, savefig=None, color='grey', alpha=0.3, lw=0.5):
+    """Plot the random walk simulated along a tree.
+    
+    Args:
+        tree (State): The root of the simulated tree.
+        show_tree (bool):
+        show_root (bool):
+        show_tips (bool):
+        ax: 
+        savefig:
+        color:
+        alpha:
+        lw:
+
+    Returns:
+        plt.Axes: The axis of the plot.
+    """
+
     no_ax = (ax is None)
     if no_ax:
         ax = plt.gca()
 
-    walk = simulation.get_location_history()
-    ax.scatter(*walk[-1, :, :].T, color=COLOR_SCATTER, s=50, lw=0, zorder=4)
     if plot_root:
-        plt.scatter(*walk[0, 0], marker='*', c=COLOR_ROOT_TRUE, s=500, zorder=5)
+        plot_root(tree.location, color=COLOR_ROOT_TRUE)
+        # plt.scatter(*tree.location, marker='*', c=COLOR_ROOT_TRUE, s=500, zorder=5)
 
-    if show_path:
-        for i in range(simulation.n_sites):
-            # k = 10
-            # w = np.hanning(k)**4.
-            # walk[:-1, i, 0] = np.convolve(
-            #     np.pad(walk[:, i, 0], (k, k), 'edge'), w, mode='same')[k:-k-1] / sum(w)
-            # walk[:-1, i, 1] = np.convolve(
-            #     np.pad(walk[:, i, 1], (k, k), 'edge'), w, mode='same')[k:-k-1] / sum(w)
+    if show_tips:
+        ax.scatter(*tree.get_leaf_locations().T, color=COLOR_SCATTER, s=50, lw=0, zorder=4)
 
-            plt.plot(*walk[:, i].T, color=COLOR_PATH, lw=PATH_WIDTH, zorder=0)
+    for node in tree.iter_descendants():
+        # k = 10
+        # w = np.hanning(k)**4.
+        # walk[:-1, i, 0] = np.convolve(
+        #     np.pad(walk[:, i, 0], (k, k), 'edge'), w, mode='same')[k:-k-1] / sum(w)
+        # walk[:-1, i, 1] = np.convolve(
+        #     np.pad(walk[:, i, 1], (k, k), 'edge'), w, mode='same')[k:-k-1] / sum(w)
+        plt.plot(*np.asarray(node.location_history).T, color=COLOR_PATH, lw=PATH_WIDTH, zorder=0)
 
     if show_tree:
-        plot_tree(simulation.root, alpha=alpha)
+        plot_tree(tree, alpha=alpha)
 
     if savefig is not None:
         plt.axis('off')
         plt.tight_layout()
         plt.savefig(savefig, format='pdf')
 
-    elif no_ax:
-        plt.axis('off')
-        plt.show()
-
+    # elif no_ax:
+    #     plt.axis('off')
+    #     plt.show()
+    return ax
 
 def animate_walk(simulation, alpha=0.3, anim_folder=ANIM_FOLDER):
     mkpath(anim_folder)
@@ -274,21 +292,22 @@ def circular_histogram(x, bins=50, range=(0, TAU), weights=None, ax=None, label=
     return ax
 
 
-def plot_rrw_step_pdf(lognormal_mean=1., n_samples=30000):
-    xmax = 10.
-    x = np.linspace(-xmax, xmax, 1000)
+def plot_rrw_step_pdf(lognormal_mean=1., n_samples=10000):
+    xmax = 6.
+    x = np.linspace(-xmax, xmax, 500)
     # plt.plot(x, normal.pdf(x, scale=0.1), label='Normal(0, 0.1)')
-    plt.plot(x, normal.pdf(x, scale=1.), label='Normal(0, 0.1)')
-    # plt.plot(x, laplace.pdf(x, scale=0.1), label='Laplace(0, 0.1)')
+    plt.plot(x, normal.pdf(x, scale=1.), label='Normal(0, 1)')
+    plt.plot(x, laplace.pdf(x, scale=1.), label='Laplace(0, 1)')
 
-    lognormal_stdev = .5
-    for lognormal_mean in [0.001, 0.1, 1.]:
+    lognormal_mean = 0.
+    for lognormal_stdev in [0.1, 0.5, 1.]:
+        lognormal_mean = -lognormal_stdev**2 / 2
         normal_stdev = np.random.lognormal(lognormal_mean, lognormal_stdev, size=n_samples)
+        print(normal_stdev)
         def step_pdf(x):
             return np.mean(normal.pdf(x[:, None], scale=normal_stdev[None, :]), axis=1)
 
-        # plt.plot(x, step_pdf(x), label='RRW (s=%.1f)' % lognormal_stdev)
-        plt.plot(x, step_pdf(x), label='RRW (mu=%.1f)' % lognormal_mean)
+        plt.plot(x, step_pdf(x), label='RRW (s=%.1f)' % lognormal_stdev)
 
     ax = plt.gca()
     ax.set_xlim([-xmax, xmax])
@@ -494,10 +513,6 @@ def plot_hull_area(hull, locs, c=None, alpha=None, lw=None):
     plt.fill(locs[v, 0], locs[v, 1], c=c, lw=lw, alpha=alpha)
 
 
-if __name__ == '__main__':
-    plot_rrw_step_pdf()
-
-
 def plot_tree_topology(tree, left=0):
     x = left + tree.n_leafs() / 2.
     y = -tree.height
@@ -510,3 +525,7 @@ def plot_tree_topology(tree, left=0):
         plt.plot([x, cx, cx], [y, y, cy], c='k')
 
         left += c.n_leafs()
+
+
+if __name__ == '__main__':
+    plot_rrw_step_pdf()

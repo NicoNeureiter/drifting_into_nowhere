@@ -275,6 +275,7 @@
 			<correlation idref="location.correlation"/>
 			<matrixInverse idref="location.varCovar"/>
 			<continuousDiffusionStatistic idref="location.diffusionRate"/>
+			<parameter idref="location.stdev"/>
 
 			<!-- END Multivariate diffusion model                                        -->
 

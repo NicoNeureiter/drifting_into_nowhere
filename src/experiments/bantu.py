@@ -44,8 +44,6 @@ def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
     if exclude_outgroup:
         tree.remove_nodes_by_name(OUTGROUP_NAMES)
 
-    # tree = tree.get_subtree([1,1,1,1,1,1])
-
     tree.write_beast_xml(xml_path, chain_length, root=root,
                          diffusion_on_a_sphere=True, movement_model=movement_model,
                          adapt_tree=adapt_tree, adapt_height=adapt_height)
@@ -60,15 +58,15 @@ if __name__ == '__main__':
     from src.util import grey
     from src.config import COLOR_ROOT_TRUE, PINK, TURQUOISE
 
-    CHAIN_LENGTH = 500000
-    BURNIN = 50000
+    CHAIN_LENGTH = 5000000
+    BURNIN = 200000
     HPD = 80
 
     MODEL = 'rrw'
     USE_OUTGROUP = 1
     ADAPT_TREE = 0
     ADAPT_HEIGHT = 0
-    FIX_ROOT = 1
+    FIX_ROOT = 0
 
     WORKING_DIR = 'data/bantu_{model}_outgroup_{og}_adapttree_{at}_' + \
                   'adaptheight_{ah}_hpd_{hpd}{fixroot}/'

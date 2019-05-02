@@ -66,7 +66,7 @@ def read_locations_file(locations_path, delimiter='\t', swap_xy=False,
 
         # Read file
         for line in loc_reader:
-            name = line[0]
+            name = line[0].lower()
             try:
                 x = float(line[1])
                 y = float(line[2])

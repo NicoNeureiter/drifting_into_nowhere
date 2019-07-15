@@ -5,62 +5,65 @@ from __future__ import absolute_import, division, print_function, \
 
 
 # Paths to separate template files
-
-RRW_XML_TEMPLATE_PATH = 'data/templates/beast_rrw_template.xml'
+CDRW_XML_TEMPLATE_PATH = 'data/templates/beast_1_rrw_fixeddrift_template.xml'
+RDRW_XML_TEMPLATE_PATH = 'data/templates/beast_1_rrw_drift_template.xml'
+RRW_XML_TEMPLATE_PATH = 'data/templates/beast_1_rrw_template.xml'
 BROWNIAN_XML_TEMPLATE_PATH = 'data/templates/beast_brownian_template.xml'
 LOCATION_TEMPLATE_PATH = 'data/templates/location_template.xml'
 
 
 # Short templates defined as python strings
-LEAF_TRAIT = '\t\t<leafTrait taxon="{id}"><parameter id="{id}.trait"/></leafTrait>\n'
-GEO_PRIOR_REF = '\t\t\t< flatGeoSpatialPrior idref = "{id}_region"/>\n'
-
 LOCATION_TEMPLATE = '''\
-		<taxon id="{id}">
-			<attr name="location">
-				{x} {y}
-			</attr>
-		</taxon>
+        <taxon id="{id}">
+			<date value="{age}" direction="forwards" units="years"/>
+            <attr name="location">
+                {x} {y}
+            </attr>
+        </taxon>
 '''
 FEATURES_TEMPLATE = '''\
-		<sequence>
-			<taxon idref="{id}"/>
-			{features}
-		</sequence>
+        <sequence>
+            <taxon idref="{id}"/>
+            {features}
+        </sequence>
 '''
+# LOCATION_TEMPLATE = ' '*24 + '{id}={x} {y}'
+# FEATURES_TEMPLATE = '    <sequence id="seq_{id}" taxon="{id}" totalcount="2" value="0"/>\n'
+# LEAF_TRAIT = '\t\t<leafTrait taxon="{id}"><parameter id="{id}.trait"/></leafTrait>\n'
+# GEO_PRIOR_REF = '\t\t\t< flatGeoSpatialPrior idref = "{id}_region"/>\n'
 
-MONOPHYLY_STATISTIC = '\t<monophylyStatistic id="monophyly({id})"><mrca><taxa idref="{id}"/>'\
-    '</mrca><treeModel idref="treeModel"/>\t</monophylyStatistic>\n'
-GEO_PRIOR = '''\
-	<flatGeoSpatialPrior id="{id}_region" taxon="{id}" kmlFileName="{kml_path}" inside="true" union="true">
-		<data>
-			<parameter idref="{id}.location"/>
-		</data>
-	</flatGeoSpatialPrior>
-'''
+# MONOPHYLY_STATISTIC = '\t<monophylyStatistic id="monophyly({id})"><mrca><taxa idref="{id}"/>'\
+#     '</mrca><treeModel idref="treeModel"/>\t</monophylyStatistic>\n'
+# GEO_PRIOR = '''\
+#   <flatGeoSpatialPrior id="{id}_region" taxon="{id}" kmlFileName="{kml_path}" inside="true" union="true">
+#       <data>
+#           <parameter idref="{id}.location"/>
+#       </data>
+#   </flatGeoSpatialPrior>
+# '''
 SPHERICAL = ' greatCircleDistance="true"'
 
 HEIGHT_OPERATORS = '''
-		<scaleOperator scaleFactor="0.75" weight="3">
-			<parameter idref="treeModel.rootHeight"/>
-		</scaleOperator>
-		<uniformOperator weight="30">
-			<parameter idref="treeModel.internalNodeHeights"/>
-		</uniformOperator>
+        <scaleOperator scaleFactor="0.75" weight="3">
+            <parameter idref="treeModel.rootHeight"/>
+        </scaleOperator>
+        <uniformOperator weight="30">
+            <parameter idref="treeModel.internalNodeHeights"/>
+        </uniformOperator>
 '''
 TREE_OPERATORS = '''
-		<subtreeSlide size="1.0" gaussian="true" weight="15">
-			<treeModel idref="treeModel"/>
-		</subtreeSlide>
-		<narrowExchange weight="15">
-			<treeModel idref="treeModel"/>
-		</narrowExchange>
-		<wideExchange weight="3">
-			<treeModel idref="treeModel"/>
-		</wideExchange>
-		<wilsonBalding weight="3">
-			<treeModel idref="treeModel"/>
-		</wilsonBalding>
+        <subtreeSlide size="1.0" gaussian="true" weight="15">
+            <treeModel idref="treeModel"/>
+        </subtreeSlide>
+        <narrowExchange weight="15">
+            <treeModel idref="treeModel"/>
+        </narrowExchange>
+        <wideExchange weight="3">
+            <treeModel idref="treeModel"/>
+        </wideExchange>
+        <wilsonBalding weight="3">
+            <treeModel idref="treeModel"/>
+        </wilsonBalding>
 '''
 
 

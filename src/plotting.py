@@ -128,8 +128,8 @@ def plot_tree(tree, color_fun=None, alpha_fun=None, cmap=None,
         plt.colorbar(sm)
 
 
-def plot_walk(tree, show_tree=False, show_root=True, show_tips=True,
-              ax=None, savefig=None, color='grey', alpha=0.3, lw=0.5):
+def plot_walk(tree, show_tree=False, show_root=True, show_tips=True, show_nodes=False,
+              ax=None, savefig=None, color='grey', alpha=0.3, lw=0.3):
     """Plot the random walk simulated along a tree.
     
     Args:
@@ -147,37 +147,38 @@ def plot_walk(tree, show_tree=False, show_root=True, show_tips=True,
         plt.Axes: The axis of the plot.
     """
 
-    no_ax = (ax is None)
-    if no_ax:
+    if ax is None:
         ax = plt.gca()
 
-    if plot_root:
-        plot_root(tree.location, color=COLOR_ROOT_TRUE)
-        # plt.scatter(*tree.location, marker='*', c=COLOR_ROOT_TRUE, s=500, zorder=5)
+    if show_root:
+        plot_root(tree.location, color=COLOR_ROOT_TRUE, label='Simulated root', ax=ax)
 
+    if show_nodes:
+        ax.scatter(*tree.get_descendant_locations().T, color=COLOR_PATH, s=20,
+                   lw=0, zorder=2)
     if show_tips:
-        ax.scatter(*tree.get_leaf_locations().T, color=COLOR_SCATTER, s=50, lw=0, zorder=4)
+        ax.scatter(*tree.get_leaf_locations().T, color=COLOR_SCATTER, s=80,
+                   # lw=1., edgecolor='w',
+                   zorder=4)
 
     for node in tree.iter_descendants():
-        # k = 10
-        # w = np.hanning(k)**4.
-        # walk[:-1, i, 0] = np.convolve(
-        #     np.pad(walk[:, i, 0], (k, k), 'edge'), w, mode='same')[k:-k-1] / sum(w)
-        # walk[:-1, i, 1] = np.convolve(
-        #     np.pad(walk[:, i, 1], (k, k), 'edge'), w, mode='same')[k:-k-1] / sum(w)
-        plt.plot(*np.asarray(node.location_history).T, color=COLOR_PATH, lw=PATH_WIDTH, zorder=0)
+        walk = np.array(node.location_history)
+        k = 12
+        w = np.hanning(k)**2
+        walk[1:-1, 0] = np.convolve(
+            np.pad(walk[:, 0], (k, k), 'edge'), w, mode='same')[k+1:-k-1] / sum(w)
+        walk[1:-1, 1] = np.convolve(
+            np.pad(walk[:, 1], (k, k), 'edge'), w, mode='same')[k+1:-k-1] / sum(w)
+        ax.plot(*walk.T, color=COLOR_PATH, lw=lw, zorder=0)
 
     if show_tree:
-        plot_tree(tree, alpha=alpha)
+        plot_tree(tree, alpha=alpha, ax=ax)
 
     if savefig is not None:
         plt.axis('off')
         plt.tight_layout()
         plt.savefig(savefig, format='pdf')
 
-    # elif no_ax:
-    #     plt.axis('off')
-    #     plt.show()
     return ax
 
 def animate_walk(simulation, alpha=0.3, anim_folder=ANIM_FOLDER):
@@ -292,15 +293,15 @@ def circular_histogram(x, bins=50, range=(0, TAU), weights=None, ax=None, label=
     return ax
 
 
-def plot_rrw_step_pdf(lognormal_mean=1., n_samples=10000):
+def plot_rrw_step_pdf(lognormal_mean=1., n_samples=2000):
     xmax = 6.
-    x = np.linspace(-xmax, xmax, 500)
+    x = np.linspace(-xmax, xmax, 1001)
     # plt.plot(x, normal.pdf(x, scale=0.1), label='Normal(0, 0.1)')
     plt.plot(x, normal.pdf(x, scale=1.), label='Normal(0, 1)')
-    plt.plot(x, laplace.pdf(x, scale=1.), label='Laplace(0, 1)')
+    # plt.plot(x, laplace.pdf(x, scale=1.), label='Laplace(0, 1)')
 
     lognormal_mean = 0.
-    for lognormal_stdev in [0.1, 0.5, 1.]:
+    for lognormal_stdev in [0.5, 1., 5.]:
         lognormal_mean = -lognormal_stdev**2 / 2
         normal_stdev = np.random.lognormal(lognormal_mean, lognormal_stdev, size=n_samples)
         print(normal_stdev)
@@ -311,28 +312,50 @@ def plot_rrw_step_pdf(lognormal_mean=1., n_samples=10000):
 
     ax = plt.gca()
     ax.set_xlim([-xmax, xmax])
-    ax.set_ylim([0, None])
+    ax.set_ylim([0, 2])
     plt.legend()
     plt.tight_layout(pad=0)
     plt.show()
 
-def plot_hpd(tree, p_hpd, location_key='location', projection=None, **kwargs_plt):
+def plot_hpd(tree, p_hpd, location_key='location', projection=None, ax=None, **kwargs_plt):
+    if ax is None:
+        ax = plt.gca()
+
     kwargs_plt.setdefault('color', COLOR_ROOT_EST)
-    kwargs_plt.setdefault('alpha', 0.2)
+    kwargs_plt.setdefault('alpha', 0.1)
     kwargs_plt.setdefault('zorder', 1)
+    kwargs_plt.setdefault('lw', 0)
 
     for polygon in tree.get_hpd(p_hpd, location_key=location_key):
         xy = polygon.exterior.xy
-        print(xy)
+        # print(xy)
         if projection is not None:
             xy = projection(xy.T).T
-            print('Projected:', xy)
-        plt.fill(*xy, **kwargs_plt)
+            # print('Projected:', xy)
+        ax.fill(*xy, **kwargs_plt)
 
 
-def plot_root(root, color=COLOR_ROOT_EST, s=500, **kwargs):
-    return plt.scatter(root[0], root[1], marker='*', c=color, s=s,
+def plot_posterior_scatter(posterior_trees, **kwargs_plt):
+    kwargs_plt.setdefault('color', COLOR_ROOT_EST)
+    kwargs_plt.setdefault('alpha', 0.1)
+    kwargs_plt.setdefault('zorder', 1)
+    kwargs_plt.setdefault('lw', 0)
+    kwargs_plt.setdefault('s', 1)
+
+    root_samples = np.array(
+        [tree.location for tree in posterior_trees]
+    )
+    # print('root_samples:', root_samples)
+    plt.scatter(*root_samples.T, **kwargs_plt)
+
+
+def plot_root(root, color=COLOR_ROOT_EST, s=800, lw=2, ax=None, **kwargs):
+    if ax is None:
+        ax = plt.gca()
+    return ax.scatter(root[0], root[1], marker='*', c=color, s=s, lw=lw,
                        zorder=5, **kwargs)
+                    # s=1600, edgecolor='w'
+
 
 def plot_backbone(simulation):
     assert isinstance(simulation, 'SimulationBackbone')
@@ -438,7 +461,26 @@ def plot_clades(tree, min_clade_size=5, max_clade_size=50, _i=0):
         return _i
 
 
-def plot_backbone_splits(tree, plot_edges=True, lw=0.1, n_clades=10, bb_side=1,
+def plot_backbone_clades(tree, _i=0):
+    if tree.is_leaf():
+        plt.scatter(*tree.location, c='k')
+        return
+
+    clade, rest = tree.children
+    print(clade.tree_size(), rest.tree_size())
+
+    plot_tree(clade, color=COLORS[_i])  # , alpha=0.2)
+    plot_tree_hull(clade, COLORS[_i])
+
+    plot_edge(tree, rest, lw=0.2, no_arrow=True)
+    plot_backbone_clades(rest, _i=_i+1)
+
+
+def next_split(tree):
+    return tree.big_child(), tree.small_child()
+
+
+def plot_backbone_splits(tree, plot_edges=True, lw=1., n_clades=10, bb_side=1,
                          plot_hull=True):
     # SUBGROUP_COLOR_IDXS = [0, 1, 1, 1, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     # SUBGROUP_COLORS = [COLORS[i] for i in SUBGROUP_COLOR_IDXS]
@@ -446,16 +488,18 @@ def plot_backbone_splits(tree, plot_edges=True, lw=0.1, n_clades=10, bb_side=1,
 
     p = tree
     for i in range(n_clades):
-        c_backbone = p.big_child()
-        c_subgroup = p.small_child()
+        if p.is_leaf():
+            break
+        c_backbone, c_subgroup = next_split(p)
         while c_subgroup.tree_size() < 10:
             print('Subgroup Size:', c_subgroup.tree_size(), '--> skipped')
             if plot_edges:
                 plot_tree(c_subgroup, color=grey(0.5), lw=lw)
-            plot_edge(p, c_backbone, no_arrow=True, lw=30*lw, color='k', zorder=3)
+            plot_edge(p, c_backbone, no_arrow=True, lw=2*lw, color='k', zorder=3)
             p = c_backbone
-            c_backbone = p.big_child()
-            c_subgroup = p.small_child()
+            if p.is_leaf():
+                break
+            c_backbone, c_subgroup = next_split(p)
         print('Subgroup Size:', c_subgroup.tree_size())
 
 
@@ -463,7 +507,7 @@ def plot_backbone_splits(tree, plot_edges=True, lw=0.1, n_clades=10, bb_side=1,
         if plot_edges:
             plot_tree(c_subgroup, color=SUBGROUP_COLORS[i], lw=lw)
 
-        plot_edge(p, c_backbone, no_arrow=True, lw=30*lw, color='k', zorder=3)
+        plot_edge(p, c_backbone, no_arrow=True, lw=2*lw, color='k', zorder=3)
         if plot_hull:
             plot_tree_hull(c_subgroup, c=SUBGROUP_COLORS[i])
 

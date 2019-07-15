@@ -132,6 +132,8 @@ class GridState(State):
         self.split_size = np.random.randint(*split_size_range)
         self.stuck = False
 
+        self.clock_rate = 1.
+
     @property
     def area(self):
         return np.count_nonzero(self.cells)
@@ -147,6 +149,10 @@ class GridState(State):
 
     def split_probability(self):
         return float(self.area >= self.split_size)
+
+    @property
+    def death_rate(self):
+        return 0.  # TODO implement death
 
     def step(self):
         if not self.stuck:
@@ -340,7 +346,7 @@ def animate_grid_world():
                 s.step()
 
         img_plt.set_array(img)
-        if i_frame % 2 == 0:
+        if i_frame % 10 == 0:
             for parent, child in s0.iter_edges():
                 if (parent, child) in edges_plotted:
                     continue
@@ -351,7 +357,7 @@ def animate_grid_world():
         return img_plt,
 
     writer = animation.FFMpegFileWriter(fps=15, bitrate=5000)
-    anim = animation.FuncAnimation(fig, update, frames=2000, interval=100, repeat=False)
+    anim = animation.FuncAnimation(fig, update, frames=2000, interval=20, repeat=False)
     plt.axis("off")
     plt.tight_layout(pad=0.)
     # anim.save('results/grid_simulation.mp4', writer=writer, dpi=6)
@@ -442,9 +448,9 @@ if __name__ == '__main__':
     # Create an XML file as input for the BEAST analysis
     tree.write_beast_xml(output_path=XML_PATH, chain_length=CHAIN_LENGTH, movement_model='rrw')
 
-    # # Run BEAST analysis
-    # run_beast(working_dir=WORKING_DIR)
-    # run_treeannotator(HPD, BURNIN, working_dir=WORKING_DIR)
+    # Run BEAST analysis
+    run_beast(working_dir=WORKING_DIR)
+    run_treeannotator(HPD, BURNIN, working_dir=WORKING_DIR)
 
     # Show original tree
     plot_tree(tree, color='k', lw=0.2)

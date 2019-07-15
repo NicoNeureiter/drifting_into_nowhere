@@ -15,7 +15,7 @@ PINK = (0.95, 0.15, 0.8)
 TURQUOISE = (0, 0.8, 0.9)
 COLOR_ROOT_EST = (0.6, 0.0, 0.3)
 COLOR_ROOT_TRUE = (0., 0.5, 0.6)
-COLOR_PATH = grey(0.6)
+COLOR_PATH = grey(0.5)
 COLOR_SCATTER = 'orange'
 
 class Cycler(object):

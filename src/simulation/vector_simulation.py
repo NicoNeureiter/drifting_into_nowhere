@@ -18,7 +18,7 @@ YULE = 'yule'
 SATURATION = 'saturation'
 LINEAR = 'linear'
 TREE_MODELS = [YULE, SATURATION, LINEAR]
-TREE_MODEL = TREE_MODELS[2]
+TREE_MODEL = TREE_MODELS[0]
 
 
 gauss_samples = collections.defaultdict(list)
@@ -55,7 +55,8 @@ class VectorState(State):
 
     def __init__(self, world, location, step_mean, step_cov, clock_rate,
                  birth_rate, drift_frequency=1., location_history=None,
-                 parent=None, children=None, name='', length=0, age=0.):
+                 parent=None, children=None, name='', length=0, age=0.,
+                 v=(0,0), death_rate=0.):
         # Ensure that we are working with numpy arrays
         location = np.asarray(location)
         self.clock_rate = clock_rate
@@ -66,6 +67,9 @@ class VectorState(State):
             self.step_cov = self.step_cov * np.eye(2)
         self.drift_frequency = drift_frequency
         self.drift = bernoulli(self.drift_frequency)
+        self._death_rate = death_rate
+
+        self.v = np.asarray(v)
 
         super(VectorState, self).__init__(world, parent=parent, children=children,
                                           name=name, length=length, age=age,
@@ -93,6 +97,13 @@ class VectorState(State):
     def name(self, name):
         self._name = name
 
+    @property
+    def death_rate(self):
+        # if self.age < 180:
+        #     return 0
+        # else:
+        return self._death_rate
+
     def step(self, step_mean=None, step_cov=None):
         """Perform a simulation step: Gaussian distribution relative to current
         location. Parameterized by mean, covariance, frequency. super(..) will
@@ -106,12 +117,13 @@ class VectorState(State):
         # Get step_mean from argument or (if arg is None) from attribute
         step_mean = step_mean or self.step_mean
         step_cov = step_cov or self.step_cov
+        s = step_cov / self.clock_rate
 
         # Draw the step according to a gaussian and apply it to current location
         if self.drift:
-            step = gaussian(step_mean / self.clock_rate, step_cov / self.clock_rate)
+            step = gaussian(step_mean / self.clock_rate, s)
         else:
-            step = gaussian([0, 0], step_cov / self.clock_rate)
+            step = gaussian([0, 0], s)
         self.location = self.location + step
 
         # Add the new location to the history
@@ -138,7 +150,9 @@ class VectorState(State):
                             self.step_cov.copy(), self.clock_rate, self.birth_rate,
                             drift_frequency=self.drift_frequency, parent=self,
                             # location_history=self.location_history.copy(),
-                            name=child_name, age=self.age)
+                            name=child_name, age=self.age, death_rate=self._death_rate
+                            # v=self.v.copy()
+                            )
 
         return child
 
@@ -185,22 +199,33 @@ class VectorWorld(World):
 
 class BackboneState(VectorState):
 
+    def __init__(self, *args, is_backbone=True, bb_stop=np.inf, **kwargs):
+        super(BackboneState, self).__init__(*args, **kwargs)
+        self.bb_stop = bb_stop
+        self.is_backbone = is_backbone
+
     def create_child(self):
         i = str(len(self.children))
         child_name = self._name + i
 
-        if i == '0':
+        birth_rate = self.birth_rate
+        if (i == '0') or (self.age > self.bb_stop):
+            is_backbone = False
             step_mean = np.zeros(2)
-            birth_rate = self.birth_rate / 4.
+            if self.is_backbone:
+                birth_rate = self.birth_rate / 6
+
         else:
-            step_mean = 0.8 * self.step_mean.copy()
+            is_backbone = self.is_backbone
+            step_mean = self.step_mean.copy()
             birth_rate = self.birth_rate
 
         child = BackboneState(self.world, self.location.copy(), step_mean,
                             self.step_cov.copy(), self.clock_rate, birth_rate,
                             drift_frequency=self.drift_frequency,
                             location_history=self.location_history.copy(), parent=self,
-                            name=child_name, age=self.age)
+                            name=child_name, age=self.age, is_backbone=is_backbone,
+                            bb_stop=self.bb_stop, death_rate=self._death_rate)
 
         return child
 

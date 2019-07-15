@@ -3,6 +3,7 @@
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
 import os
+import sys
 import csv
 import logging
 import random
@@ -180,6 +181,9 @@ class StringTemplate(object):
         self.format_dict.update(fill_values)
 
     def fill(self):
+        # print()
+        # print('\n'.join(self.format_dict.keys()))
+        # print()
         return self.template_string.format(**self.format_dict)
 
     def __str__(self):
@@ -246,11 +250,16 @@ def experiment_preperations(work_dir):
     mkpath(exp_dir)
 
     # Safe state of current file and config to the experiment folder
+    base_file = sys.argv[0]
+    shutil.copy(base_file, exp_dir)
     shutil.copy(__file__, exp_dir)
     shutil.copy('src/config.py', exp_dir)
 
     # Generate random seed
     seed = random.randint(0, 1e9)
+    # seed = 773565758
+    # seed = 333036130
+    # seed = 549156425
 
     # Set it in built-in random and numpy.random
     random.seed(seed)
@@ -262,3 +271,26 @@ def experiment_preperations(work_dir):
         seed_file.write(str(seed))
 
     return exp_dir
+
+
+def birth_death_expectation(birth_rate, death_rate, n_steps, vrange=None):
+
+    N_SAMPLES = 1000
+    samples = np.ones(N_SAMPLES, dtype=int)
+    for _ in range(n_steps):
+        new_samples = np.copy(samples)
+        new_samples += np.random.binomial(samples, birth_rate)
+        new_samples -= np.random.binomial(samples, death_rate)
+        samples = new_samples
+
+    print('P total extinction: %.2f' % np.mean(samples == 0))
+    print('P too small: %.2f' % np.mean(samples < vrange[0]))
+    print('P too big: %.2f' % np.mean(samples > vrange[1]))
+
+    if vrange is not None:
+        samples = np.array([s for s in samples if vrange[0] <= s <= vrange[1]])
+
+    print('P out of range: %.2f' % (1 - len(samples) / N_SAMPLES))
+    print('Expected leafs: %.2f' % np.mean(samples))
+    print('Standard dev. leafs: %.2f' % np.std(samples))
+    return np.mean(samples)

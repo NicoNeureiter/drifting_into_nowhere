@@ -61,6 +61,9 @@ class World(object):
         self.sites[i] = child_1
         self.sites.append(child_2)
 
+    def register_death(self, node):
+        self.sites.remove(node)
+
     def get_newick_tree(self):
         return newick_tree(self.root)
 
@@ -102,12 +105,20 @@ class State(Tree):
     def name(self, name):
         self._name = name
 
+    @property
+    def death_rate(self):
+        """The death rate of the taxon. Implemented as a property, since it
+        could depend on time, diversity, environmental factors,..."""
+        raise NotImplementedError
+
     def step(self):
         # Update length and age
         self.length += 1
         self.age += 1
 
-        if bernoulli(self.split_probability()):
+        if bernoulli(self.death_rate / self.clock_rate):
+            self.die()
+        elif bernoulli(self.split_probability()):
             self.split()
 
     def split_probability(self):
@@ -121,6 +132,9 @@ class State(Tree):
         self.children.append(c2)
 
         self.world.register_split(self, c1, c2)
+
+    def die(self):
+        self.world.register_death(self)
 
     def create_child(self):
         """Create a child of the current state. Most parameters will be copied
@@ -144,7 +158,7 @@ def run_simulation(n_steps, root, world):
     root.split()
 
     for i_step in range(n_steps):
-        for state in world.sites:
+        for state in list(world.sites):
             state.step()
 
 
@@ -172,7 +186,7 @@ def run_backbone_simulation(n_steps, root, world, backbone_steps=None):
             bb_node = bb_node.children[0]
 
         # All nodes step
-        for state in world.sites:
+        for state in list(world.sites):
             state.step()
 
         # Split bb_node on every third step (if it didn't happend already)
@@ -181,5 +195,5 @@ def run_backbone_simulation(n_steps, root, world, backbone_steps=None):
 
     # Finish the remaining steps after backbone is simulated
     for _ in range(n_steps - backbone_steps):
-        for state in world.sites:
+        for state in list(world.sites):
             state.step()

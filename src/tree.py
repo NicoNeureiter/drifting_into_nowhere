@@ -117,6 +117,22 @@ class Tree(object):
         for child in self.children:
             child.set_location_attribute(location_attribute)
 
+    def drop_fossils(self, max_age=0.):
+        """Remove all fossils older than ´max_age´."""
+        if max_age == np.inf:
+            return
+
+        leafs = list(self.iter_leafs())
+        t_final = max(node.height for node in leafs)
+
+        too_old = []
+        for node in leafs:
+            if node.height < t_final - max_age:
+                too_old.append(node)
+        print('Number of fossils:', len(too_old))
+        self.remove_nodes(too_old)
+
+
     @staticmethod
     def from_newick(newick, location_key='location', swap_xy=False, with_attributes=True):
         """Create a tree from the Newick representation.
@@ -154,18 +170,25 @@ class Tree(object):
         Returns:
             np.array or None: The extracted location of the node.
         """
-        location_key += '%i'
-        location_median_key = location_key + '_median'
 
-        if (location_key % 1) in self.attributes:
-            x = self[location_key % 1]
-            y = self[location_key % 2]
-        elif (location_median_key % 1) in self.attributes:
-            x = self[location_median_key % 1]
-            y = self[location_median_key % 2]
+        if location_key in self.attributes:
+            location_str = self.attributes[location_key]
+            location_str = location_str.replace('{', '(') \
+                                       .replace('}', ')')
+            x, y = eval(location_str)
+
         else:
-            return None
+            location_key += '%i'
+            location_median_key = location_key + '_median'
 
+            if (location_key % 1) in self.attributes:
+                x = self[location_key % 1]
+                y = self[location_key % 2]
+            elif (location_median_key % 1) in self.attributes:
+                x = self[location_median_key % 1]
+                y = self[location_median_key % 2]
+            else:
+                return None
         return np.array([x, y])
 
     def get_hpd(self, p_hpd, location_key='location'):
@@ -181,8 +204,6 @@ class Tree(object):
         hpd_key_x = hpd_key_template.format(i_axis=1, i_polygon=i)
         hpd_key_y = hpd_key_template.format(i_axis=2, i_polygon=i)
         polygons = []
-        print(attr_keys)
-        print(hpd_key_x, hpd_key_y)
         while hpd_key_x in attr_keys:
             hpd_x_str = self.attributes[hpd_key_x][1:-1]
             hpd_y_str = self.attributes[hpd_key_y][1:-1]
@@ -226,15 +247,32 @@ class Tree(object):
     def remove_nodes_by_name(self, names):
         """Remove nodes with the given names from the tree, preserving a valid
         tree topology and branch lengths."""
+        remove_list = []
+        for c in self.iter_descendants():
+            if c.name in names:
+                remove_list.append(c)
+
+        self.remove_nodes(remove_list)
+
+    def remove_nodes(self, remove_list):
+        """Remove nodes specified in ´remove_list´ from the tree, preserving a
+        valid tree topology and branch lengths."""
+        # TODO should we allow to remove internal nodes without dropping the whole subtree?
+
+        # for node in self.iter_leafs():
+        #     if node in remove_list:
+        #         p = node.parent
+        #         p.children.remove(node)
 
         was_leaf = (len(self.children) == 0)
 
+
         # Recursively remove nodes
         for c in self.children.copy():
-            if c.name in names:
+            if c in remove_list:
                 self.children.remove(c)
             else:
-                c.remove_nodes_by_name(names)
+                c.remove_nodes(remove_list)
 
         if was_leaf:
             return
@@ -251,12 +289,24 @@ class Tree(object):
             c = self.children[0]
 
             if p is None:
+                # self is root -> single child becomes the root
+                print(self.height, [cc.height for cc in c.children])
+                prev_len = self.length
                 self.copy_other_node(c)
+                self.length += prev_len
+                self.parent = None
+                print(self.height, [cc.height for cc in self.children])
             else:
+                # Replace self by c in parent.children
+                # (self is skipped -> length must be adapted)
+                c_prev_height = c.height
+
                 self_idx = p.children.index(self)
                 p.children[self_idx] = c
+                c.parent = p
+                c.length += self.length
 
-            c.length += self.length
+                assert c.height == c_prev_height
 
     def to_newick(self, write_attributes=True):
         """Compute a Newick string representation of the tree."""
@@ -288,8 +338,9 @@ class Tree(object):
             self.add_child(c)
 
     def _format_location(self):
+        # print(self.name)
         x, y = self.location
-        return LOCATION_TEMPLATE.format(id=self.name, x=x, y=y)
+        return LOCATION_TEMPLATE.format(id=self.name, x=x, y=y, age=self.height)
 
     def _format_alignment(self):
         alignment_str = str_concat_array(self.alignment)
@@ -303,13 +354,18 @@ class Tree(object):
 
     def write_beast_xml(self, output_path, chain_length, root=None,
                         movement_model='rrw', diffusion_on_a_sphere=False,
-                        jitter=0., adapt_height=False, adapt_tree=False):
+                        jitter=0.01, adapt_height=False, adapt_tree=False,
+                        drift_prior_std=0.1):
         if movement_model == 'rrw':
             template_path = RRW_XML_TEMPLATE_PATH
+        elif movement_model == 'rdrw':
+            template_path = RDRW_XML_TEMPLATE_PATH
+        elif movement_model == 'cdrw':
+            template_path = CDRW_XML_TEMPLATE_PATH
         elif movement_model == 'brownian':
             template_path = BROWNIAN_XML_TEMPLATE_PATH
         else:
-            raise ValueError
+            raise ValueError('Unknown movement_model `%s`' % movement_model)
 
         with open(template_path, 'r') as xml_template_file:
             xml_template = StringTemplate(xml_template_file.read())
@@ -325,9 +381,9 @@ class Tree(object):
         # Fix root / don't fix root by setting set steep / flat prior
         if root is None:
             root = [0., 0.]
-            root_precision = 1e-8
+            root_precision = 1e-6
         else:
-            root_precision = 1e8
+            root_precision = 1e6
 
         xml_template.root_x = root[0]
         xml_template.root_y = root[1]
@@ -341,6 +397,9 @@ class Tree(object):
         xml_template.spherical = SPHERICAL if diffusion_on_a_sphere else ''
         xml_template.tree_operators = TREE_OPERATORS if adapt_tree else ''
         xml_template.height_operators = HEIGHT_OPERATORS if adapt_height else ''
+        # xml_template.n_dim_loc = 2 * self.tree_size()
+        if movement_model in ('rdrw', 'cdrw'):
+            xml_template.drift_prior_std = drift_prior_std
 
         with open(output_path, 'w') as beast_xml_file:
             beast_xml_file.write(
@@ -349,6 +408,7 @@ class Tree(object):
 
     def load_locations_from_csv(self, csv_path, swap_xy=False):
         locations, _ = read_locations_file(csv_path, swap_xy=swap_xy)
+        locations = {k.lower():v for k,v in locations.items()}
         for node in self.iter_descendants():
             if node.name in locations:
                 node._location = locations[node.name]
@@ -482,10 +542,11 @@ def parse_tree(s, location_key='location', swap_xy=False, with_attributes=True):
 
 
 def parse_attributes(s):
-    if not s.startswith('[&'):
+    if not s.startswith('['):
         return {}, s
-
-    s = s[2:]
+    s = s[1:]
+    if s.startswith('&'):
+        s = s[1:]
 
     attrs = {}
     k1, _, s = s.partition('=')
@@ -511,7 +572,17 @@ def parse_length(s):
     s = s[1:]
 
     end = min(find(s, ','), find(s, ')'))
-    length = float(s[:end])
+
+    slen = s[:end]
+    if '@' in slen:
+        slen = slen[:find(s, '@')]
+
+    try:
+        length = float(slen)
+    except Exception as e:
+        print(s[:end])
+        print(s)
+        raise
     s = s[end:]
     return length, s
 

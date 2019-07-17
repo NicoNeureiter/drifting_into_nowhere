@@ -257,9 +257,7 @@ def experiment_preperations(work_dir):
 
     # Generate random seed
     seed = random.randint(0, 1e9)
-    # seed = 773565758
-    # seed = 333036130
-    # seed = 549156425
+    # seed = 579529824
 
     # Set it in built-in random and numpy.random
     random.seed(seed)
@@ -294,3 +292,4 @@ def birth_death_expectation(birth_rate, death_rate, n_steps, vrange=None):
     print('Expected leafs: %.2f' % np.mean(samples))
     print('Standard dev. leafs: %.2f' % np.std(samples))
     return np.mean(samples)
+

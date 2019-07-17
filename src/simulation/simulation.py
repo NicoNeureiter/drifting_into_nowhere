@@ -67,6 +67,9 @@ class World(object):
     def get_newick_tree(self):
         return newick_tree(self.root)
 
+    def stop_condition(self):
+        return False
+
 
 class State(Tree):
     """This class captures the state for one society in the simulation. It
@@ -160,6 +163,8 @@ def run_simulation(n_steps, root, world):
     for i_step in range(n_steps):
         for state in list(world.sites):
             state.step()
+        if world.stop_condition():
+            break
 
 
 def run_backbone_simulation(n_steps, root, world, backbone_steps=None):

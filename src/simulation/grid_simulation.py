@@ -141,6 +141,8 @@ class GridState(State):
     @property
     def location(self):
         cell_locations = grid_to_index_tuples(self.cells)
+        # print()
+        print(np.count_nonzero(self.cells), np.array(cell_locations).shape)
         return np.mean(cell_locations, axis=0)[::-1]
 
     @property
@@ -167,21 +169,21 @@ class GridState(State):
 
         # Find free neighbouring cells as candidates for expansion
         neighbour_cells = neighbourhood(self.cells)
-        if bernoulli(1 - self.p_conflict):
-            neighbour_cells &= world.free_space()
-        else:
-            print('CONFLICT!!!')
+        # if bernoulli(1 - self.p_conflict):
+        neighbour_cells &= world.free_space()
+        # else:
+        #     print('CONFLICT!!!')
         candidates = grid_to_index_tuples(neighbour_cells)
 
         # In case there is no space to grow: don't even attempt to in the future
         if len(candidates) == 0:
-            print('No space to grow...')
+            # print('No space to grow...')
             self.stuck = True
             return
 
         # Randomly add one of the candidate cells to the site
-        n_samples = min(3, len(candidates))
-        # n_samples = 1
+        # n_samples = min(3, len(candidates))
+        n_samples = 1
         for i, j in random.sample(candidates, n_samples):
             self.cells[i, j] = True
             world.occupancy_grid[i,j] = True
@@ -202,6 +204,8 @@ class GridState(State):
         # Set first rows in new cells and remove them from the old cells
         cells_1[rows, cols] = False
         cells_2[rows, cols] = True
+
+        # print('SPLIT! New sizes: (%i, %i)' % (np.count_nonzero(cells_1), np.count_nonzero(cells_2)))
         return cells_1, cells_2
 
     def split(self):
@@ -259,13 +263,16 @@ class GridWorld(World):
     def free_space(self):
         return ~self.occupancy_grid
 
+    def stop_condition(self):
+        if np.random.random() < 0.2:
+            return np.all(self.occupancy_grid)
+
 
 def plot_gridtree(tree, colors, img=None):
     h, w = tree.grid_size
 
     if img is None:
         img = 255 * np.ones((h, w, 3), dtype=int)
-
 
     for i, state in enumerate(tree.iter_descendants()):
         img[state.cells] = colors[i]
@@ -298,8 +305,8 @@ def init_bantu_simulation():
 
     return world, s0, img_color[:, :, :3]
 
-def init_empty_simulation(grid_size, min_margin = 50):
-    P_GROW_DISTR = beta(1., 1.).rvs
+
+def init_empty_simulation(grid_size, p_grow_distr, min_margin = 50, split_size_range=(45,50)):
 
     # Init world
     world = GridWorld(grid_size)
@@ -310,21 +317,70 @@ def init_empty_simulation(grid_size, min_margin = 50):
     i = np.random.randint(min_margin, w - min_margin)
     j = np.random.randint(min_margin, h - min_margin)
     a[i, j] = True
-    s0 = GridState(world, a, P_GROW_DISTR, (45, 50))
-
+    s0 = GridState(world, a, p_grow_distr, split_size_range)
     world.set_root(s0)
+
+    # Grow zone to initial size
+    initial_size = np.random.uniform(*split_size_range)
+    for _ in range(initial_size-1):
+        s0.grow()
 
     img = np.ones((*world.grid_size, 3)).astype(int) * 255
 
     return world, s0, img
 
+
+def filter_angles(x, y, min_angle=0, max_angle=2*np.pi):
+    angles = np.arctan2(y, x) % (2*np.pi)
+    return np.logical_and(min_angle <= angles, angles <= max_angle)
+
+
+def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5, split_size_range=(45, 50)):
+    H, W = grid_size
+    cx = (W-1) / 2
+    cy = (H-1) / 2
+
+    # Init world
+    world = GridWorld(grid_size)
+    y, x = np.mgrid[:H, :W]
+    x = x - cx
+    y = y - cy
+    world.occupancy_grid = ~filter_angles(x, y, min_angle=0, max_angle=cone_angle)
+    img = np.array([1 - world.occupancy_grid] * 3).transpose((1, 2, 0)) * 255
+
+    # Choose a random grid point and set as start-state
+    a = np.zeros(grid_size, dtype=bool)
+    w, h = grid_size
+    i = int(np.ceil(w / 2))
+    j = int(np.ceil(h / 2))
+    a[i, j] = True
+    s0 = GridState(world, a, p_grow_distr, split_size_range=split_size_range)
+    world.set_root(s0)
+    # world.occupancy_grid[i,j] = False
+
+    # print(i,j)
+    # free_indicies = (grid_to_index_tuples(world.free_space()))
+    # print(free_indicies)
+    # print([np.linalg.norm(np.array(pt) - np.array([i,j])) for pt in free_indicies])
+    # print(min(free_indicies, key=lambda pt: np.linalg.norm(np.array(pt) - np.array([i,j]))))
+
+    # Grow zone to initial size
+    initial_size = np.random.randint(*split_size_range)
+    for _ in range(initial_size-1):
+        s0.grow()
+
+    # img = np.array([1-world.occupancy_grid]*3).transpose((1,2,0)) * 255
+
+    return world, s0, img
+
+
 def animate_grid_world():
     global states, img, ax
-    world, s0, img = init_bantu_simulation()
-    # world, s0, img = init_empty_simulation((200, 200))
-
-    for _ in range(30):
-        s0.grow()
+    # world, s0, img = init_bantu_simulation()
+    P_GROW_DISTR = beta(1., 1.).rvs
+    world, s0, img = init_cone_simulation((90, 160), p_grow_distr=P_GROW_DISTR,
+                                          cone_angle=np.random.random()*np.pi*2,
+                                          split_size_range=(45,50))
 
     fig, ax = plt.subplots()
     # fig.set_size_inches(*world.grid_size)
@@ -382,14 +438,14 @@ def animate_grid_world():
     # plt.tight_layout(pad=0.)
     # plt.show()
 
-    plot_tree_topology(s0.get_subtree([0]))
-
-    plt.show()
+    # plot_tree_topology(s0.get_subtree([0]))
+    #
+    # plt.show()
 
 
 if __name__ == '__main__':
-    animate_grid_world()
-    exit()
+    # animate_grid_world()
+    # exit()
 
     from src.simulation.simulation import run_simulation
     from src.beast_interface import run_beast, run_treeannotator, load_tree_from_nexus
@@ -403,34 +459,31 @@ if __name__ == '__main__':
     exp_dir = experiment_preperations(WORKING_DIR)
 
     # Analysis Parameters
-    CHAIN_LENGTH = 250000
+    CHAIN_LENGTH = 150000
     BURNIN = 20000
     HPD = 80
 
     # SIMULATION PARAMETER
-    N = 180
-    MARGIN = 50
-    N_STEPS = 1000
+    N = 160
+    SPLIT_SIZE_RANGE = (40, 100)
+    N_STEPS = 5000
     P_GROW_DISTR = beta(1., 1.).rvs
-    P_CONFLICT = 0.
+    # P_CONFLICT = 0.
 
-    cells = np.zeros((N, N), dtype=bool)
-    # i, j = np.random.randint(MARGIN, N - MARGIN, size=2)
-    i = j = N // 2
-    cells[i, j] = True
-    world = GridWorld((N, N))
-    root = GridState(world, cells, P_GROW_DISTR, (60, 150))
+    CONE_ANGLE = 1.5 * np.pi
+    print('Cone angle:', CONE_ANGLE)
+
+    world, root, img_mask = init_cone_simulation(grid_size=(N,N), p_grow_distr=P_GROW_DISTR,
+                                          cone_angle=CONE_ANGLE,
+                                          split_size_range=SPLIT_SIZE_RANGE)
+    # img_mask = 0.7 + 0.3 * img_mask / 255
+    img_mask[img_mask==0] = 200
+
+    # plt.imshow(_)
+    # plt.show()
+    # exit()
 
     run_simulation(N_STEPS, root, world)
-
-    # Choose a subtree (to demonstrate drift)
-    def binary_strings(length):
-        for i in range(2**length):
-            yield [(i//2**b)%2 for b in range(length)]
-
-    # binary_strings_3 = [[(i//4)%2, (i//2)%2, i%2] for i in range(8)]
-    # subtree_path = max(binary_strings(3), key=lambda st: root.get_subtree(st).n_leafs())
-    # tree = root.get_subtree(subtree_path)
     tree = root
 
     # Print some stats
@@ -438,9 +491,11 @@ if __name__ == '__main__':
     print('Tree size:', tree.tree_size())
 
     # Show plot of the simulation run (whole tree in grey, subtree in color)
-    img = plot_gridtree(root, GREY_TONES)
-    plot_gridtree(tree, COLORS_RGB, img=img)
+    # img = plot_gridtree(root, GREY_TONES)
+    plot_gridtree(tree, COLORS_RGB, img=img_mask)
 
+    plt.imshow(img_mask, origin='lower')
+    # plt.gca().invert_yaxis()
     plt.axis('off')
     plt.tight_layout(pad=0.)
     plt.show()
@@ -458,10 +513,13 @@ if __name__ == '__main__':
     plt.scatter(*tree.get_leaf_locations().T, c='darkblue', s=3.)
 
     # # Show reconstructed tree
-    # reconstructed = load_tree_from_nexus(tree_path=TREE_PATH)
-    # plot_root(reconstructed.location, color=COLOR_ROOT_EST)
-    # plot_hpd(reconstructed, HPD)
+    reconstructed = load_tree_from_nexus(tree_path=TREE_PATH)
+    plot_root(reconstructed.location, color=COLOR_ROOT_EST)
+    plot_hpd(reconstructed, HPD)
 
+    plt.imshow(img_mask, origin='lower')
+
+    # plt.gca().invert_yaxis()
     plt.axis('off')
     plt.tight_layout(pad=0.)
     plt.show()

@@ -142,7 +142,7 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
 
     # Compute and log mean offset
     offset = eval_mean_offset(root, trees)
-    results['mean_offset'] = offset
+    results['mean_offset'] = list(offset)
     logger.info('\t\tMean offset: (%.2f, %.2f)' % tuple(offset))
 
     # Compute and log bias

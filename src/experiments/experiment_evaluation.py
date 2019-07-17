@@ -220,7 +220,7 @@ if __name__ == '__main__':
     CONSTRAINED_EXPANSION = 'constrained_expansion'
     MODES = [RANDOM_WALK, CONSTRAINED_EXPANSION]
     mode = MODES[0]
-    N_REPEAT = 20
+    N_REPEAT = 50
     HPD_VALUES = [80,95]
 
     # MOVEMENT MODEL

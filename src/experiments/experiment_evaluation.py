@@ -8,105 +8,33 @@ import sys
 import collections
 import json
 import datetime
-import itertools
-import shelve
 
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
-from sklearn.model_selection import ParameterGrid
 # from joblib import Parallel, delayed
 
 from src.config import _COLORS
+from src.experiments.experiment import Experiment
 from src.simulation.simulation import run_simulation
 from src.simulation.vector_simulation import VectorState, VectorWorld
-from src.simulation.grid_simulation import GridState
 from src.beast_interface import (run_beast, run_treeannotator, load_trees)
-from src.evaluation import (eval_bias, eval_rmse, eval_stdev, eval_hpd_hit)
+from src.evaluation import (eval_bias, eval_rmse, eval_stdev, eval_mean_offset)
 from src.plotting import plot_mean_and_std
 from src.util import (total_drift_2_step_drift, total_diffusion_2_step_var,
-                      normalize, mkpath, dump, load_from,
-                      experiment_preperations)
+                      normalize, mkpath, dump, load_from)
 
 logger = logging.getLogger('experiment')
 logger.setLevel(logging.DEBUG)
 logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
-# def iter_param_grid(param_dict):
-#     param_names = param_dict.keys()
-#     for values in itertools.product(*param_dict.values()):
-#         yield dict(zip(param_names, values))
-
-CHECKLIST_FILE_NAME = 'checklist.txt'
-
-class Experiment(object):
-
-    def __init__(self, fixed_params, variable_param_ranges, pipeline, working_directory):
-        self.fixed_params = fixed_params
-        self.variable_param_ranges = variable_param_ranges
-        self.pipeline = pipeline
-        self.working_directory = working_directory
-        mkpath(working_directory)
-
-    def run(self, n_repeat, resume=False):
-        # Copy parameter grid and add the run index
-        var_param_names = list(self.variable_param_ranges.keys())
-        grid = dict(self.variable_param_ranges)
-        # grid['i_repeat'] = range(n_repeat)
-
-        checklist_path = os.path.join(self.working_directory, CHECKLIST_FILE_NAME)
-        if resume:
-            with open(checklist_path, 'r') as checklist_file:
-                checklist = checklist_file.readlines()
-        else:
-            checklist = []
-
-        results_by_params = pd.DataFrame(columns=var_param_names + ['results'])
-
-        # Iterate over the grid
-        for var_params in ParameterGrid(grid):
-            run_id = format_params(var_params)
-            results_path = os.path.join(self.working_directory,
-                                        'results_%s.pkl' % run_id)
-            row = dict(var_params)
-
-            if run_id in checklist:
-                results = load_from(results_path)
-                row['results'] = results
-                results_by_params.append(row, ignore_index=True)
-                continue
-
-            params = dict(var_params, working_dir=self.working_directory, **self.fixed_params)
-
-            # experiment_directory = os.path.join(self.working_directory, run_id)
-            # os.mkdir(experiment_directory)
-
-            results = self.pipeline(**params)
-            # outputs = {}
-            # for operator in self.pipeline:
-            #     inputs = dict(params)
-            #     inputs.update(outputs)
-            #     outputs = operator(**inputs)
-            row['results'] = results
-            results_by_params.append(row, ignore_index=True)
-            print(results_path)
-            dump(results, results_path)
-
-            with open(checklist_path, 'a') as checklist_file:
-                checklist_file.write(run_id)
-
-
-def format_params(params):
-    return ','.join(['%s=%s' % (k,v) for k, v in params.items()])
-
-
-def run_experiment(n_runs, n_steps, n_expected_leafs, total_drift,
+def run_experiment(n_steps, n_expected_leafs, total_drift,
                    total_diffusion, drift_density, p_settle, drift_direction,
                    chain_length, burnin, hpd_values, working_dir,
                    diversification_mode='birth-death', turnover=0.2,
                    clock_rate=1.0, movement_model='rrw',
-                   max_fossil_age=0):
+                   max_fossil_age=0, **kwargs):
     """Run an experiment ´n_runs´ times with the specified parameters.
 
     Args:
@@ -143,7 +71,6 @@ def run_experiment(n_runs, n_steps, n_expected_leafs, total_drift,
     min_leaves, max_leaves = 0.4 * n_expected_leafs, 2. * n_expected_leafs
 
     # Paths
-    experiment_preperations(working_dir)
     xml_path = working_dir + 'nowhere.xml'
 
     # Inferred parameters
@@ -166,143 +93,68 @@ def run_experiment(n_runs, n_steps, n_expected_leafs, total_drift,
             assert 0 < hpd < 100
         assert burnin < chain_length
 
-    metrics = ['rmse', 'bias', 'stdev'] + ['hpd_%.2f' % p for p in hpd_values]
-    results = pd.DataFrame(columns=['i_run', 'rmse'] + metrics)
-    for i_run in range(n_runs):
-        logger.info('\tRun %i...' % i_run)
-        run_results = pd.Series(index=results.columns)
-        run_results['i_run'] = i_run
+    metrics = ['rmse', 'bias', 'stdev'] + ['hpd_%i' % p for p in hpd_values]
+    results = {m: None for m in metrics}
 
-        valid_tree = False
-        while not valid_tree:
-            # Run Simulation
-            p0 = np.zeros(2)
-            world = VectorWorld()
-            tree_simu = VectorState(world, p0, step_mean, step_var, clock_rate, birth_rate,
-                                    drift_frequency=drift_density, death_rate=death_rate)
-            run_simulation(n_steps, tree_simu, world)
+    valid_tree = False
+    while not valid_tree:
+        # Run Simulation
+        p0 = np.zeros(2)
+        world = VectorWorld()
+        tree_simu = VectorState(world, p0, step_mean, step_var, clock_rate, birth_rate,
+                                drift_frequency=drift_density, death_rate=death_rate)
+        run_simulation(n_steps, tree_simu, world)
 
-            # Check whether tree satisfies criteria
-            #    Criteria: not too small/big & root has two extant subtrees
-            n_leafs = len([n for n in tree_simu.iter_leafs() if n.height == n_steps])
-            valid_tree = (min_leaves < n_leafs < max_leaves)
-            for c in tree_simu.children:
-                if not any(n.height == n_steps for n in c.iter_leafs()):
-                    valid_tree = False
+        # Check whether tree satisfies criteria...
+        #    Criteria: not too small/big & root has two extant subtrees
+        n_leafs = len([n for n in tree_simu.iter_leafs() if n.height == n_steps])
+        valid_tree = (min_leaves < n_leafs < max_leaves)
+        for c in tree_simu.children:
+            if not any(n.height == n_steps for n in c.iter_leafs()):
+                valid_tree = False
 
-        tree_simu.drop_fossils(max_fossil_age)
+    tree_simu.drop_fossils(max_fossil_age)
 
-        # Create an XML file as input for the BEAST analysis
-        tree_simu.write_beast_xml(xml_path, chain_length, movement_model=movement_model,
-                                  drift_prior_std=1.)
+    # Create an XML file as input for the BEAST analysis
+    tree_simu.write_beast_xml(xml_path, chain_length, movement_model=movement_model,
+                              drift_prior_std=1.)
 
-        # Run phylogeographic reconstruction in BEAST
-        run_beast(working_dir=working_dir)
+    # Run phylogeographic reconstruction in BEAST
+    run_beast(working_dir=working_dir)
 
-        for hpd in hpd_values:
-            # Summarize tree using tree-annotator
-            tree = run_treeannotator(hpd, burnin, working_dir=working_dir)
+    for hpd in hpd_values:
+        # Summarize tree using tree-annotator
+        tree = run_treeannotator(hpd, burnin, working_dir=working_dir)
 
-            # Compute HPD coverage
-            hit = tree.root_in_hpd(root, hpd)
-            run_results['hpd_%.2f' % hpd] = hit
-            logger.info('\t\tRoot in %i%% HPD: %s' % (hpd, hit))
+        # Compute HPD coverage
+        hit = tree.root_in_hpd(root, hpd)
+        results['hpd_%i' % hpd] = hit
+        logger.info('\t\tRoot in %i%% HPD: %s' % (hpd, hit))
 
 
-        # Load posterior trees for other metrics
-        trees = load_trees(working_dir + 'nowhere.trees')
+    # Load posterior trees for other metrics
+    trees = load_trees(working_dir + 'nowhere.trees')
 
-        # Compute and log RMSE
-        rmse = eval_rmse(root, trees)
-        run_results['rmse'] = rmse
-        logger.info('\t\tRMSE: %.2f' % rmse)
+    # Compute and log RMSE
+    rmse = eval_rmse(root, trees)
+    results['rmse'] = rmse
+    logger.info('\t\tRMSE: %.2f' % rmse)
 
-        # Compute and log bias
-        bias = eval_bias(root, trees)
-        run_results['bias'] = bias
-        logger.info('\t\tBias: %.2f' % bias)
+    # Compute and log mean offset
+    offset = eval_mean_offset(root, trees)
+    results['mean_offset'] = offset
+    logger.info('\t\tMean offset: (%.2f, %.2f)' % tuple(offset))
 
-        # Compute and log standard deviation
-        stdev = eval_stdev(root, trees)
-        run_results['stdev'] = stdev
-        logger.info('\t\tStdev: %.2f' % stdev)
+    # Compute and log bias
+    bias = eval_bias(root, trees)
+    results['bias'] = bias
+    logger.info('\t\tBias: %.2f' % bias)
 
-        results.append(run_results, ignore_index=True)
+    # Compute and log standard deviation
+    stdev = eval_stdev(root, trees)
+    results['stdev'] = stdev
+    logger.info('\t\tStdev: %.2f' % stdev)
 
-    return results
-
-
-def run_experiments_varying_drift(default_settings, working_dir):
-    logger.info('=' * 100)
-
-    # Drift values to be evaluated
-    s = default_settings['total_diffusion']
-    total_drift_values = s * np.linspace(0., 3., 13)
-
-    experiment = Experiment(default_settings, {'total_drift': total_drift_values},
-                            run_experiment, WORKING_DIR)
-    experiment.run(default_settings['n_runs'])
-
-    # # def run(total_drift, i, kwargs):
-    # #     logger.info('Experiment with [total_drift = %.2f]' % total_drift)
-    # #     kwargs['total_drift'] = total_drift
-    # #     default_settings['working_dir'] = working_dir + '_%i' % i
-    # #     return total_drift, run_experiment(**kwargs)
-    # #
-    # # pool = Parallel(n_jobs=2, backend='multiprocessing')
-    # # results = pool(delayed(run)(drift, i, default_settings)
-    # #                for i, drift in enumerate(total_drift_values))
-    # # results = dict(results)
-    #
-    # results_by_param = {}
-    # for total_drift in total_drift_values:
-    #     logger.info('Experiment with [total_drift = %.2f]' % total_drift)
-    #
-    #     default_settings['total_drift'] = total_drift
-    #     stats = run_experiment(**default_settings, working_dir=working_dir)
-    #     results_by_param[total_drift] = stats
-    #
-    # # Dump the results in a pickle file
-    # dump(results_by_param, working_dir + 'results.pkl')
-    # return results_by_param
-
-
-def run_experiments_varying_p_settle(default_settings, working_dir):
-    logger.info('=' * 100)
-
-    # Settling probability values to be evaluated
-    p_settle_values = np.linspace(0., 1., 11)
-
-    results = {}
-    for p_settle in p_settle_values:
-        logger.info('Experiment with [p_settle = %.2f]' % p_settle)
-
-        default_settings['p_settle'] = p_settle
-        stats = run_experiment(**default_settings, working_dir=working_dir)
-        results[p_settle] = stats
-
-    # Dump the results in a pickle file
-    dump(results, working_dir + 'results.pkl')
-    return results
-
-
-def run_experiments_varying_drift_density(default_settings, working_dir):
-    logger.info('=' * 100)
-
-    # Settling probability values to be evaluated
-    # drift_density_values = np.linspace(0.5, 1., 20)
-    drift_density_values = 2**(-np.linspace(0., 10., 11))
-
-    results = {}
-    for drift_density in drift_density_values:
-        logger.info('Experiment with [drift_density = %.2f]' % drift_density)
-
-        default_settings['drift_density'] = drift_density
-        stats = run_experiment(**default_settings, working_dir=working_dir)
-        results[drift_density] = stats
-
-    # Dump the results in a pickle file
-    dump(results, working_dir + 'results.pkl')
     return results
 
 
@@ -368,10 +220,18 @@ if __name__ == '__main__':
     CONSTRAINED_EXPANSION = 'constrained_expansion'
     MODES = [RANDOM_WALK, CONSTRAINED_EXPANSION]
     mode = MODES[0]
+    N_REPEAT = 20
+    HPD_VALUES = [80,95]
 
     # MOVEMENT MODEL
-    MOVEMENT_MODEL = 'cdrw'
-    MAX_FOSSIL_AGE = 0
+    if len(sys.argv) > 1:
+        MOVEMENT_MODEL = sys.argv[1]
+    else:
+        MOVEMENT_MODEL = 'rrw'
+    if len(sys.argv) > 2:
+        MAX_FOSSIL_AGE = float(sys.argv[2])
+    else:
+        MAX_FOSSIL_AGE = 0
 
     # Set working directory
     today = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
@@ -382,6 +242,7 @@ if __name__ == '__main__':
     # Set cwd for logger
     LOGGER_PATH = os.path.join(WORKING_DIR, 'experiment.log')
     logger.addHandler(logging.FileHandler(LOGGER_PATH))
+    logger.info('=' * 100)
 
     # Default experiment parameters
     if mode == RANDOM_WALK:
@@ -391,7 +252,7 @@ if __name__ == '__main__':
             'total_diffusion': 2000.,
             'total_drift': 0.,
             'drift_density': 1.,
-            'drift_direction': [0., .1],
+            'drift_direction': [0., 1.],
             'p_settle': 0.,
             'movement_model': MOVEMENT_MODEL,
             'max_fossil_age': MAX_FOSSIL_AGE,
@@ -400,18 +261,18 @@ if __name__ == '__main__':
         simulation_settings = {
             'n_steps': 5000,
             'grid_size': 100,
-
         }
 
     default_settings = {
         # Analysis Parameters
-        'chain_length': 500000,
+        'chain_length': 600000,
         'burnin': 100000,
         # Experiment Settings
-        'n_runs': 30,
-        'hpd_values': [80, 95]
+        'hpd_values': HPD_VALUES
     }
     default_settings.update(simulation_settings)
+
+    EVAL_METRICS = ['rmse', 'mean_offset', 'bias', 'stdev'] + ['hpd_%i' % p for p in HPD_VALUES]
 
     # Safe the default settings
     with open(WORKING_DIR+'settings.json', 'w') as json_file:
@@ -420,13 +281,17 @@ if __name__ == '__main__':
     # Run the experiment
     if 1:
         if mode == RANDOM_WALK:
-            run_experiments_varying_drift(default_settings, working_dir=WORKING_DIR)
-        elif mode == CONSTRAINED_EXPANSION:
-            pass
+            total_drift_values = np.linspace(0., 3., 13) * default_settings['total_diffusion']
+            # total_drift_values = np.linspace(0., 3., 4) * default_settings['total_diffusion']
+            variable_parameters = {'total_drift': total_drift_values}
         else:
             raise NotImplementedError
 
-    # Plot the results
-    # WORKING_DIR = WORKING_DIR.format(mode=mode, time='2018-11-28')
-    results = load_from(WORKING_DIR + 'results.pkl')
-    plot_experiment_results(results, x_name=mode, xscale='linear')
+    experiment = Experiment(run_experiment, default_settings, variable_parameters,
+                            EVAL_METRICS, N_REPEAT, WORKING_DIR)
+    experiment.run(resume=0)
+
+    # # Plot the results
+    # # WORKING_DIR = WORKING_DIR.format(mode=mode, time='2018-11-28')
+    # results = load_from(WORKING_DIR + 'results.pkl')
+    # plot_experiment_results(results, x_name=mode, xscale='linear')

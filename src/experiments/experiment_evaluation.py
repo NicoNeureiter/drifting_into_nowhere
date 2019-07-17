@@ -142,7 +142,8 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
 
     # Compute and log mean offset
     offset = eval_mean_offset(root, trees)
-    results['mean_offset'] = list(offset)
+    results['mean_offset_x'] = offset[0]
+    results['mean_offset_y'] = offset[1]
     logger.info('\t\tMean offset: (%.2f, %.2f)' % tuple(offset))
 
     # Compute and log bias
@@ -254,17 +255,14 @@ if __name__ == '__main__':
             'drift_density': 1.,
             'drift_direction': [0., 1.],
             'p_settle': 0.,
-            'movement_model': MOVEMENT_MODEL,
             'max_fossil_age': MAX_FOSSIL_AGE,
         }
     else:
-        simulation_settings = {
-            'n_steps': 5000,
-            'grid_size': 100,
-        }
+        raise NotImplementedError
 
     default_settings = {
         # Analysis Parameters
+        'movement_model': MOVEMENT_MODEL,
         'chain_length': 600000,
         'burnin': 100000,
         # Experiment Settings
@@ -272,7 +270,7 @@ if __name__ == '__main__':
     }
     default_settings.update(simulation_settings)
 
-    EVAL_METRICS = ['rmse', 'mean_offset', 'bias', 'stdev'] + ['hpd_%i' % p for p in HPD_VALUES]
+    EVAL_METRICS = ['rmse', 'mean_offset_x', 'mean_offset_y', 'bias', 'stdev'] + ['hpd_%i' % p for p in HPD_VALUES]
 
     # Safe the default settings
     with open(WORKING_DIR+'settings.json', 'w') as json_file:

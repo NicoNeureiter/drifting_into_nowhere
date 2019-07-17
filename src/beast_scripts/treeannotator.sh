@@ -7,8 +7,8 @@ TREES_FILE=$4
 MCC_FILE=$5
 
 cd $CWD
-export BEAST="/opt/phylo/beast"
-export LD_LIBRARY_PATH=$HOME/lib:$LD_LIBRARY_PATH
-export PKG_CONFIG_PATH=$HOME/lib/pkgconfig:$PKG_CONFIG_PATH
+#export BEAST="/opt/phylo/beast"
+#export LD_LIBRARY_PATH=$HOME/lib:$LD_LIBRARY_PATH
+#export PKG_CONFIG_PATH=$HOME/lib/pkgconfig:$PKG_CONFIG_PATH
 
 treeannotator -burnin $BURNIN -hpd2D 0.$HPD $TREES_FILE $MCC_FILE

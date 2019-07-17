@@ -114,12 +114,12 @@ class Experiment(object):
         results_path = os.path.join(self.working_directory, RESULTS_FILE_NAME)
         checklist_path = os.path.join(self.working_directory, CHECKLIST_FILE_NAME)
 
-        with open(checklist_path, 'a') as checklist_file:
-            run_id = format_params(var_params)
-            checklist_file.write(run_id + '\n')
-
         with open(results_path, 'a') as results_file:
             row = dict(var_params)
             row.update(run_results)
             row_data = [repr(row[k]) for k in self.columns]
             results_file.write(','.join(row_data) + '\n')
+
+        with open(checklist_path, 'a') as checklist_file:
+            run_id = format_params(var_params)
+            checklist_file.write(run_id + '\n')

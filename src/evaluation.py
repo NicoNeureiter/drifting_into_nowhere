@@ -13,6 +13,13 @@ def eval_hpd_hit(root, p_hpd, burnin, working_dir):
     tree_mcc = run_treeannotator(p_hpd, burnin, working_dir=working_dir)
     return tree_mcc.root_in_hpd(root, p_hpd)
 
+
+def eval_mean_offset(root, trees):
+    root_samples = [t.location for t in trees]
+    mean_estimate = np.mean(root_samples, axis=0)
+    return mean_estimate - root
+
+
 def eval_bias(root, trees):
     root_samples = [t.location for t in trees]
     mean_estimate = np.mean(root_samples, axis=0)

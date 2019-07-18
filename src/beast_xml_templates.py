@@ -8,7 +8,7 @@ from __future__ import absolute_import, division, print_function, \
 CDRW_XML_TEMPLATE_PATH = 'data/templates/beast_1_rrw_fixeddrift_template.xml'
 RDRW_XML_TEMPLATE_PATH = 'data/templates/beast_1_rrw_drift_template.xml'
 RRW_XML_TEMPLATE_PATH = 'data/templates/beast_1_rrw_template.xml'
-BROWNIAN_XML_TEMPLATE_PATH = 'data/templates/beast_brownian_template.xml'
+BROWNIAN_XML_TEMPLATE_PATH = 'data/templates/beast_1_brownian_template.xml'
 LOCATION_TEMPLATE_PATH = 'data/templates/location_template.xml'
 
 

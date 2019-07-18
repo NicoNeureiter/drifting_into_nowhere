@@ -141,8 +141,6 @@ class GridState(State):
     @property
     def location(self):
         cell_locations = grid_to_index_tuples(self.cells)
-        # print()
-        print(np.count_nonzero(self.cells), np.array(cell_locations).shape)
         return np.mean(cell_locations, axis=0)[::-1]
 
     @property
@@ -334,6 +332,10 @@ def filter_angles(x, y, min_angle=0, max_angle=2*np.pi):
     angles = np.arctan2(y, x) % (2*np.pi)
     return np.logical_and(min_angle <= angles, angles <= max_angle)
 
+def filter_norm(x, y, max_norm):
+    norms = np.hypot(x, y)
+    return norms <= max_norm
+
 
 def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5, split_size_range=(45, 50)):
     H, W = grid_size
@@ -346,6 +348,7 @@ def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5, split_size_ran
     x = x - cx
     y = y - cy
     world.occupancy_grid = ~filter_angles(x, y, min_angle=0, max_angle=cone_angle)
+    world.occupancy_grid |= ~filter_norm(x, y, min(cx, cy))
     img = np.array([1 - world.occupancy_grid] * 3).transpose((1, 2, 0)) * 255
 
     # Choose a random grid point and set as start-state
@@ -464,38 +467,67 @@ if __name__ == '__main__':
     HPD = 80
 
     # SIMULATION PARAMETER
-    N = 160
-    SPLIT_SIZE_RANGE = (40, 100)
+    # N = 160
+    N = 200
+    SPLIT_SIZE_RANGE = (70, 100)
     N_STEPS = 5000
     P_GROW_DISTR = beta(1., 1.).rvs
     # P_CONFLICT = 0.
 
-    CONE_ANGLE = 1.5 * np.pi
-    print('Cone angle:', CONE_ANGLE)
+    CONE_ANGLE = .2 * np.pi
+    n = int(N / (CONE_ANGLE ** .5))
+    world, root, img = init_cone_simulation(grid_size=(n, n), p_grow_distr=P_GROW_DISTR,
+                                            cone_angle=CONE_ANGLE,
+                                            split_size_range=SPLIT_SIZE_RANGE)
+    run_simulation(int(N_STEPS), root, world)
+    tree = root
 
-    world, root, img_mask = init_cone_simulation(grid_size=(N,N), p_grow_distr=P_GROW_DISTR,
-                                          cone_angle=CONE_ANGLE,
-                                          split_size_range=SPLIT_SIZE_RANGE)
-    # img_mask = 0.7 + 0.3 * img_mask / 255
-    img_mask[img_mask==0] = 200
+    print(tree.n_leafs())
 
-    # plt.imshow(_)
+    # tree_sizes = []
+    # cone_areas = []
+    # cone_angles = np.pi*np.linspace(0.25, 2, 8)
+    # for CONE_ANGLE in cone_angles:
+    #     print('Cone angle:', CONE_ANGLE)
+    #
+    #     n = int(N/(CONE_ANGLE**.5))
+    #
+    #     tmp = []
+    #     for _ in range(10):
+    #         world, root, img_mask = init_cone_simulation(grid_size=(n, n), p_grow_distr=P_GROW_DISTR,
+    #                                               cone_angle=CONE_ANGLE,
+    #                                               split_size_range=SPLIT_SIZE_RANGE)
+    #
+    #         # img_mask = 0.7 + 0.3 * img_mask / 255
+    #         # img_mask[img_mask==0] = 200
+    #         # plt.imshow(img_mask, origin='lower')
+    #         # plt.show()
+    #
+    #         run_simulation(int(N_STEPS), root, world)
+    #         tree = root
+    #
+    #         # Print some stats
+    #         print(max([n.age for n in tree.iter_leafs()]))
+    #         print('Tree imbalance:', tree_imbalance(tree))
+    #         print('Tree size:', tree.tree_size())
+    #         print('Free area:', np.count_nonzero(img_mask))
+    #         print()
+    #         tmp.append(tree.tree_size())
+    #     tree_sizes.append(np.mean(tmp))
+    #     # cone_areas.append(np.count_nonzero(img_mask))
+    #
+    # plt.plot(cone_angles, tree_sizes)
+    # # plt.plot(cone_angles, cone_areas)
+    # # plt.plot(cone_angles, np.array(cone_areas) / np.array(tree_sizes))
+    #
     # plt.show()
     # exit()
 
-    run_simulation(N_STEPS, root, world)
-    tree = root
-
-    # Print some stats
-    print('Tree imbalance:', tree_imbalance(tree))
-    print('Tree size:', tree.tree_size())
-
     # Show plot of the simulation run (whole tree in grey, subtree in color)
     # img = plot_gridtree(root, GREY_TONES)
-    plot_gridtree(tree, COLORS_RGB, img=img_mask)
+    plot_gridtree(tree, COLORS_RGB, img=img)
 
-    plt.imshow(img_mask, origin='lower')
-    # plt.gca().invert_yaxis()
+    plt.imshow(img, origin='lower')
     plt.axis('off')
     plt.tight_layout(pad=0.)
     plt.show()
@@ -515,11 +547,11 @@ if __name__ == '__main__':
     # # Show reconstructed tree
     reconstructed = load_tree_from_nexus(tree_path=TREE_PATH)
     plot_root(reconstructed.location, color=COLOR_ROOT_EST)
-    plot_hpd(reconstructed, HPD)
+    plot_hpd(reconstructed, HPD, alpha=0.5)
 
-    plt.imshow(img_mask, origin='lower')
+    img_gray = np.mean(img, axis=-1)
+    plt.imshow(img_gray, origin='lower', cmap='gray')
 
-    # plt.gca().invert_yaxis()
     plt.axis('off')
     plt.tight_layout(pad=0.)
     plt.show()

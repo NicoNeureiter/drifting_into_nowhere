@@ -39,9 +39,7 @@ class Experiment(object):
             TODO add evaluation functions as arguments?
         working_directory (str): The path to the working directory in which the
             temporary files and final results are stored.
-
     """
-
 
     def __init__(self, pipeline, fixed_params, variable_param_options,
                  eval_metrics, n_repeat, working_directory):

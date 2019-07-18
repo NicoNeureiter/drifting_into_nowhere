@@ -31,6 +31,7 @@ def eval_stdev(root, trees):
     std = np.std(root_samples, axis=0)
     return np.linalg.norm(std)
 
+
 def eval_rmse(root, trees):
     errors = [dist(root, t.location)**2. for t in trees]
     return np.mean(errors)**0.5

@@ -32,8 +32,7 @@ logger.addHandler(logging.StreamHandler(sys.stdout))
 def run_experiment(n_steps, n_expected_leafs, total_drift,
                    total_diffusion, drift_density, p_settle, drift_direction,
                    chain_length, burnin, hpd_values, working_dir,
-                   diversification_mode='birth-death', turnover=0.2,
-                   clock_rate=1.0, movement_model='rrw',
+                   turnover=0.2, clock_rate=1.0, movement_model='rrw',
                    max_fossil_age=0, **kwargs):
     """Run an experiment ´n_runs´ times with the specified parameters.
 
@@ -93,9 +92,6 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
             assert 0 < hpd < 100
         assert burnin < chain_length
 
-    metrics = ['rmse', 'bias', 'stdev'] + ['hpd_%i' % p for p in hpd_values]
-    results = {m: None for m in metrics}
-
     valid_tree = False
     while not valid_tree:
         # Run Simulation
@@ -122,97 +118,55 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
     # Run phylogeographic reconstruction in BEAST
     run_beast(working_dir=working_dir)
 
+    results = evaluate(working_dir, burnin, hpd_values, root)
+
+    # Add statistics about simulated tree (to compare between simulation modes)
+    results['observed_stdev'] = np.hypot(*np.std(tree_simu.get_leaf_locations(), axis=0))
+    leafs_mean = np.mean(tree_simu.get_leaf_locations(), axis=0)
+    leafs_mean_offset = leafs_mean - root
+    results['observed_drift_x'] = leafs_mean_offset[0]
+    results['observed_drift_y'] = leafs_mean_offset[1]
+    results['observed_drift_norm'] = np.hypot(*leafs_mean_offset)
+
+    return results
+
+
+def evaluate(working_dir, burnin, hpd_values, true_root):
+    results = {}
     for hpd in hpd_values:
         # Summarize tree using tree-annotator
         tree = run_treeannotator(hpd, burnin, working_dir=working_dir)
 
         # Compute HPD coverage
-        hit = tree.root_in_hpd(root, hpd)
+        hit = tree.root_in_hpd(true_root, hpd)
         results['hpd_%i' % hpd] = hit
         logger.info('\t\tRoot in %i%% HPD: %s' % (hpd, hit))
-
 
     # Load posterior trees for other metrics
     trees = load_trees(working_dir + 'nowhere.trees')
 
     # Compute and log RMSE
-    rmse = eval_rmse(root, trees)
+    rmse = eval_rmse(true_root, trees)
     results['rmse'] = rmse
     logger.info('\t\tRMSE: %.2f' % rmse)
 
     # Compute and log mean offset
-    offset = eval_mean_offset(root, trees)
-    results['mean_offset_x'] = offset[0]
-    results['mean_offset_y'] = offset[1]
+    offset = eval_mean_offset(true_root, trees)
+    results['bias_x'] = offset[0]
+    results['bias_y'] = offset[1]
     logger.info('\t\tMean offset: (%.2f, %.2f)' % tuple(offset))
 
     # Compute and log bias
-    bias = eval_bias(root, trees)
-    results['bias'] = bias
+    bias = eval_bias(true_root, trees)
+    results['bias_norm'] = bias
     logger.info('\t\tBias: %.2f' % bias)
 
     # Compute and log standard deviation
-    stdev = eval_stdev(root, trees)
+    stdev = eval_stdev(true_root, trees)
     results['stdev'] = stdev
     logger.info('\t\tStdev: %.2f' % stdev)
 
     return results
-
-
-def plot_experiment_results(results, x_name='Total Drift', xscale='linear'):
-    x_values = list(results.keys())
-
-    l2_error_scatter = []
-    l2_errors_mean = []
-    l2_errors_std = []
-    coverage_stats = collections.defaultdict(list)
-
-    for x, stats in results.items():
-        l2_errors = stats['l2_error']
-
-        # Compute L2-error statistics
-        l2_errors_mean.append(np.mean(l2_errors))
-        l2_errors_std.append(np.std(l2_errors))
-
-        # Store L2-error values for scatter plot
-        for y in l2_errors:
-            l2_error_scatter.append([x, y])
-
-        # Compute coverage statistics
-        hpd_coverages = stats['hpd_coverage']
-        for p, hits in hpd_coverages.items():
-            coverage_stats[p].append(np.mean(hits))
-
-    # Transform to numpy
-    l2_error_scatter = np.asarray(l2_error_scatter)
-    l2_errors_mean = np.asarray(l2_errors_mean)
-    l2_errors_std = np.asarray(l2_errors_std)
-
-    # Plot the mean L2-Errors +/- standard deviation
-    plt.scatter(*l2_error_scatter.T, c='lightgrey')
-    plt.plot(x_values, x_values, c='k', lw=0.4)
-    plot_mean_and_std(x_values, l2_errors_mean, l2_errors_std, color=_COLORS[0],
-                      label=r'Average L2-error of reconstructed root')
-
-    plt.xscale(xscale)
-    plt.legend()
-    plt.xlim(min(x_values), max(x_values))
-    plt.ylim(0, None)
-    plt.xlabel(x_name)
-    plt.show()
-
-    # Plot a curve and
-    for i, (p, coverage) in enumerate(coverage_stats.items()):
-        plt.plot(x_values, coverage,
-                 c=_COLORS[i], label='%i%% HPD coverage' % p)
-        plt.axhline(p / 100, c=_COLORS[i], ls='--', alpha=0.3)
-
-    plt.xscale(xscale)
-    plt.legend()
-    plt.xlim(min(x_values), max(x_values))
-    plt.ylim(-0.02, 1.03)
-    plt.xlabel(x_name)
-    plt.show()
 
 
 if __name__ == '__main__':
@@ -221,14 +175,14 @@ if __name__ == '__main__':
     CONSTRAINED_EXPANSION = 'constrained_expansion'
     MODES = [RANDOM_WALK, CONSTRAINED_EXPANSION]
     mode = MODES[0]
-    N_REPEAT = 50
-    HPD_VALUES = [80,95]
+    N_REPEAT = 20
+    HPD_VALUES = [95]
 
     # MOVEMENT MODEL
     if len(sys.argv) > 1:
         MOVEMENT_MODEL = sys.argv[1]
     else:
-        MOVEMENT_MODEL = 'rrw'
+        MOVEMENT_MODEL = 'brownian'
     if len(sys.argv) > 2:
         MAX_FOSSIL_AGE = float(sys.argv[2])
     else:
@@ -263,14 +217,16 @@ if __name__ == '__main__':
     default_settings = {
         # Analysis Parameters
         'movement_model': MOVEMENT_MODEL,
-        'chain_length': 600000,
-        'burnin': 100000,
+        'chain_length': 350000,
+        'burnin': 50000,
         # Experiment Settings
         'hpd_values': HPD_VALUES
     }
     default_settings.update(simulation_settings)
 
-    EVAL_METRICS = ['rmse', 'mean_offset_x', 'mean_offset_y', 'bias', 'stdev'] + ['hpd_%i' % p for p in HPD_VALUES]
+    EVAL_METRICS = ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
+                   ['hpd_%i' % p for p in HPD_VALUES] + \
+                   ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm']
 
     # Safe the default settings
     with open(WORKING_DIR+'settings.json', 'w') as json_file:

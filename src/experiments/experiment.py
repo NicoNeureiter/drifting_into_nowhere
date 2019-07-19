@@ -93,9 +93,7 @@ class Experiment(object):
         results_path_2 = os.path.join(self.working_directory, RESULTS_FILE_NAME)
         checklist_path = os.path.join(self.working_directory, CHECKLIST_FILE_NAME)
 
-        if resume:
-            if not os.path.exists(checklist_path):
-                touch(checklist_path)
+        if resume and os.path.exists(checklist_path):
             with open(checklist_path, 'r') as checklist_file:
                 checklist = checklist_file.read().splitlines()
         else:

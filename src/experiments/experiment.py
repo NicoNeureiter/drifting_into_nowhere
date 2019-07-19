@@ -3,12 +3,15 @@
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
 import os
+import logging
 
 from collections import OrderedDict
 from sklearn.model_selection import ParameterGrid
 
 from src.util import mkpath, experiment_preperations, touch
 
+
+LOGGER = logging.getLogger('experiment')
 
 CHECKLIST_FILE_NAME = 'checklist.txt'
 RESULTS_FILE_NAME = 'results.csv'
@@ -74,9 +77,9 @@ class Experiment(object):
         pipeline_args = dict(self.fixed_params, working_dir=self.working_directory)
         for var_params in grid:
             run_id = format_params(var_params)
-            print('\n' + run_id)
-            # logging.info('\tRun experiment with settings: %s' % run_id)
+            LOGGER.info('\nRun experiment with settings: %s' % run_id)
             if run_id in checklist:
+                LOGGER.info('\tExperiment already in checklis.')
                 continue
 
             pipeline_args.update(var_params)

@@ -13,13 +13,14 @@ from src.util import str_concat_array, extract_newick_from_nexus, SubprocessExce
 BEAST_LOGGER_PATH = 'logs/beast.log'
 mkpath(BEAST_LOGGER_PATH)
 
-beast_logger = logging.getLogger('beast')
-beast_logger.setLevel(logging.DEBUG)
-beast_logger.addHandler(logging.FileHandler(BEAST_LOGGER_PATH))
+EXPERIMENT_LOGGER = logging.getLogger('experiment')
 
-beast_logger.info('='*100)
-beast_logger.info('New Run')
-beast_logger.info('='*100)
+BEAST_LOGGER = logging.getLogger('beast')
+BEAST_LOGGER.setLevel(logging.DEBUG)
+BEAST_LOGGER.addHandler(logging.FileHandler(BEAST_LOGGER_PATH))
+BEAST_LOGGER.info('=' * 100)
+BEAST_LOGGER.info('New Run')
+BEAST_LOGGER.info('=' * 100)
 
 def write_nexus(simulation, path, fossils=None):
     data_str = ''
@@ -79,9 +80,9 @@ def run_beast(working_dir):
     t0 = time.time()
     ret = subprocess.run(bash_command, shell=True, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
-    print('BEAST Runtime: %.2f' % (time.time() - t0))
-    beast_logger.info(ret.stdout.decode())
-    beast_logger.info(ret.stderr.decode())
+    EXPERIMENT_LOGGER.info('\tBEAST Runtime: %.2f' % (time.time() - t0))
+    BEAST_LOGGER.info(ret.stdout.decode())
+    BEAST_LOGGER.info(ret.stderr.decode())
     if ret.returncode != 0:
         raise SubprocessException
 
@@ -102,8 +103,8 @@ def run_treeannotator(hpd, burnin, working_dir,
 
     ret = subprocess.run(bash_command, shell=True, stdout=subprocess.PIPE,
                          stderr=subprocess.PIPE)
-    beast_logger.info(ret.stdout.decode())
-    beast_logger.info(ret.stderr.decode())
+    BEAST_LOGGER.info(ret.stdout.decode())
+    BEAST_LOGGER.info(ret.stderr.decode())
     if ret.returncode != 0:
         raise SubprocessException
 

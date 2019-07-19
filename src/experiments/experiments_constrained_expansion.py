@@ -17,9 +17,8 @@ from src.simulation.grid_simulation import init_cone_simulation
 from src.beast_interface import run_beast
 from src.util import mkpath
 
-logger = logging.getLogger('experiment')
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler(sys.stdout))
+
+LOGGER = logging.getLogger('experiment')
 
 
 def run_experiment(n_steps, grid_size, cone_angle, split_size_range,
@@ -97,8 +96,10 @@ if __name__ == '__main__':
 
     # Set cwd for logger
     LOGGER_PATH = os.path.join(WORKING_DIR, 'experiment.log')
-    logger.addHandler(logging.FileHandler(LOGGER_PATH))
-    logger.info('=' * 100)
+    LOGGER.setLevel(logging.DEBUG)
+    LOGGER.addHandler(logging.StreamHandler(sys.stdout))
+    LOGGER.addHandler(logging.FileHandler(LOGGER_PATH))
+    LOGGER.info('=' * 100)
 
     # Default experiment parameters
     simulation_settings = {

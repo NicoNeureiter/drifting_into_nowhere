@@ -24,9 +24,8 @@ from src.plotting import plot_mean_and_std
 from src.util import (total_drift_2_step_drift, total_diffusion_2_step_var,
                       normalize, mkpath, dump, load_from)
 
-logger = logging.getLogger('experiment')
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler(sys.stdout))
+
+LOGGER = logging.getLogger('experiment')
 
 
 def run_experiment(n_steps, n_expected_leafs, total_drift,
@@ -140,7 +139,7 @@ def evaluate(working_dir, burnin, hpd_values, true_root):
         # Compute HPD coverage
         hit = tree.root_in_hpd(true_root, hpd)
         results['hpd_%i' % hpd] = hit
-        logger.info('\t\tRoot in %i%% HPD: %s' % (hpd, hit))
+        LOGGER.info('\t\tRoot in %i%% HPD: %s' % (hpd, hit))
 
     # Load posterior trees for other metrics
     trees = load_trees(working_dir + 'nowhere.trees')
@@ -148,23 +147,23 @@ def evaluate(working_dir, burnin, hpd_values, true_root):
     # Compute and log RMSE
     rmse = eval_rmse(true_root, trees)
     results['rmse'] = rmse
-    logger.info('\t\tRMSE: %.2f' % rmse)
+    LOGGER.info('\t\tRMSE: %.2f' % rmse)
 
     # Compute and log mean offset
     offset = eval_mean_offset(true_root, trees)
     results['bias_x'] = offset[0]
     results['bias_y'] = offset[1]
-    logger.info('\t\tMean offset: (%.2f, %.2f)' % tuple(offset))
+    LOGGER.info('\t\tMean offset: (%.2f, %.2f)' % tuple(offset))
 
     # Compute and log bias
     bias = eval_bias(true_root, trees)
     results['bias_norm'] = bias
-    logger.info('\t\tBias: %.2f' % bias)
+    LOGGER.info('\t\tBias: %.2f' % bias)
 
     # Compute and log standard deviation
     stdev = eval_stdev(true_root, trees)
     results['stdev'] = stdev
-    logger.info('\t\tStdev: %.2f' % stdev)
+    LOGGER.info('\t\tStdev: %.2f' % stdev)
 
     return results
 
@@ -196,8 +195,10 @@ if __name__ == '__main__':
 
     # Set cwd for logger
     LOGGER_PATH = os.path.join(WORKING_DIR, 'experiment.log')
-    logger.addHandler(logging.FileHandler(LOGGER_PATH))
-    logger.info('=' * 100)
+    LOGGER.setLevel(logging.DEBUG)
+    LOGGER.addHandler(logging.StreamHandler(sys.stdout))
+    LOGGER.addHandler(logging.FileHandler(LOGGER_PATH))
+    LOGGER.info('=' * 100)
 
     # Default experiment parameters
     if mode == RANDOM_WALK:

@@ -149,8 +149,17 @@ def total_diffusion_2_step_var(total_diffusion, n_steps):
     return total_diffusion ** 2 / n_steps
 
 
+def touch(fname):
+    if os.path.exists(fname):
+        os.utime(fname, None)
+    else:
+        open(fname, 'a').close()
+
+
 def mkpath(path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.isdir(path):
+        touch(path)
 
 
 class StringTemplate(object):

@@ -3,13 +3,11 @@
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
 import os
-# import logging
 
 from collections import OrderedDict
-import pandas as pd
 from sklearn.model_selection import ParameterGrid
 
-from src.util import mkpath, load_from, dump, experiment_preperations
+from src.util import mkpath, experiment_preperations, touch
 
 
 CHECKLIST_FILE_NAME = 'checklist.txt'
@@ -96,6 +94,8 @@ class Experiment(object):
         checklist_path = os.path.join(self.working_directory, CHECKLIST_FILE_NAME)
 
         if resume:
+            if not os.path.exists(checklist_path):
+                touch(checklist_path)
             with open(checklist_path, 'r') as checklist_file:
                 checklist = checklist_file.read().splitlines()
         else:

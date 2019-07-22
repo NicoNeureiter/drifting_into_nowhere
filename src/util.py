@@ -302,3 +302,17 @@ def birth_death_expectation(birth_rate, death_rate, n_steps, vrange=None):
     print('Standard dev. leafs: %.2f' % np.std(samples))
     return np.mean(samples)
 
+
+def parse_arg(i, default, dtype=str):
+    """Parse the ´i´th argument if provided in sys.argv, else return ´default´.
+    Args:
+        i (int): Index of the argument in sys.argv
+        default (dtype): The default values.
+        dtype (type): The type of the argument.
+    Returns:
+        dtype: The parsed CLI argument.
+    """
+    if len(sys.argv) > i:
+        return dtype(sys.argv[i])
+    else:
+        return dtype(default)

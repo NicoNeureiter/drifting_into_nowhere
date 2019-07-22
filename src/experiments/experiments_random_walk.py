@@ -5,24 +5,18 @@ from __future__ import absolute_import, division, print_function, \
 import logging
 import os
 import sys
-import collections
 import json
 import datetime
 
 import numpy as np
-import matplotlib.pyplot as plt
-import pandas as pd
-# from joblib import Parallel, delayed
 
-from src.config import _COLORS
 from src.experiments.experiment import Experiment
 from src.simulation.simulation import run_simulation
 from src.simulation.vector_simulation import VectorState, VectorWorld
 from src.beast_interface import (run_beast, run_treeannotator, load_trees)
 from src.evaluation import (eval_bias, eval_rmse, eval_stdev, eval_mean_offset)
-from src.plotting import plot_mean_and_std
 from src.util import (total_drift_2_step_drift, total_diffusion_2_step_var,
-                      normalize, mkpath, dump, load_from)
+                      normalize, mkpath, parse_arg)
 
 
 LOGGER = logging.getLogger('experiment')
@@ -169,28 +163,17 @@ def evaluate(working_dir, burnin, hpd_values, true_root):
 
 
 if __name__ == '__main__':
-    # MODES
-    RANDOM_WALK = 'random_walk'
-    CONSTRAINED_EXPANSION = 'constrained_expansion'
-    MODES = [RANDOM_WALK, CONSTRAINED_EXPANSION]
-    mode = MODES[0]
-    N_REPEAT = 20
-    HPD_VALUES = [95]
+    HPD_VALUES = [80, 95]
 
-    # MOVEMENT MODEL
-    if len(sys.argv) > 1:
-        MOVEMENT_MODEL = sys.argv[1]
-    else:
-        MOVEMENT_MODEL = 'brownian'
-    if len(sys.argv) > 2:
-        MAX_FOSSIL_AGE = float(sys.argv[2])
-    else:
-        MAX_FOSSIL_AGE = 0
+    # Experiment CLI arguments
+    MOVEMENT_MODEL = parse_arg(1, 'rrw')
+    MAX_FOSSIL_AGE = parse_arg(2, 0.0, float)
+    N_REPEAT = parse_arg(3, 60, int)
 
     # Set working directory
     today = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
-    WORKING_DIR = 'experiments/{mode}/{mm}_fossils={max_age}/'
-    WORKING_DIR = WORKING_DIR.format(mode=mode, mm=MOVEMENT_MODEL, max_age=MAX_FOSSIL_AGE)
+    WORKING_DIR = 'experiments/random_walk/{mm}_fossils={max_age}/'.format(
+        mm=MOVEMENT_MODEL, max_age=MAX_FOSSIL_AGE)
     mkpath(WORKING_DIR)
 
     # Set cwd for logger
@@ -201,29 +184,25 @@ if __name__ == '__main__':
     LOGGER.info('=' * 100)
 
     # Default experiment parameters
-    if mode == RANDOM_WALK:
-        simulation_settings = {
-            'n_steps': 5000,
-            'n_expected_leafs': 100,
-            'total_diffusion': 2000.,
-            'total_drift': 0.,
-            'drift_density': 1.,
-            'drift_direction': [0., 1.],
-            'p_settle': 0.,
-            'max_fossil_age': MAX_FOSSIL_AGE,
-        }
-    else:
-        raise NotImplementedError
-
     default_settings = {
-        # Analysis Parameters
+        # Simulation parameters
+        'n_steps': 5000,
+        'n_expected_leafs': 100,
+        'total_diffusion': 2000.,
+        'total_drift': 0.,
+        'drift_density': 1.,
+        'drift_direction': [0., 1.],
+        'p_settle': 0.,
+        'max_fossil_age': MAX_FOSSIL_AGE,
+
+        # Analysis parameters
         'movement_model': MOVEMENT_MODEL,
         'chain_length': 350000,
         'burnin': 50000,
-        # Experiment Settings
+
+        # Evaluation parameters
         'hpd_values': HPD_VALUES
     }
-    default_settings.update(simulation_settings)
 
     EVAL_METRICS = ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
                    ['hpd_%i' % p for p in HPD_VALUES] + \
@@ -234,19 +213,9 @@ if __name__ == '__main__':
         json.dump(default_settings, json_file)
 
     # Run the experiment
-    if 1:
-        if mode == RANDOM_WALK:
-            total_drift_values = np.linspace(0., 3., 13) * default_settings['total_diffusion']
-            # total_drift_values = np.linspace(0., 3., 4) * default_settings['total_diffusion']
-            variable_parameters = {'total_drift': total_drift_values}
-        else:
-            raise NotImplementedError
+    total_drift_values = np.linspace(0., 3., 13) * default_settings['total_diffusion']
+    variable_parameters = {'total_drift': total_drift_values}
 
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, N_REPEAT, WORKING_DIR)
     experiment.run(resume=0)
-
-    # # Plot the results
-    # # WORKING_DIR = WORKING_DIR.format(mode=mode, time='2018-11-28')
-    # results = load_from(WORKING_DIR + 'results.pkl')
-    # plot_experiment_results(results, x_name=mode, xscale='linear')

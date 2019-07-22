@@ -15,8 +15,7 @@ from src.experiments.experiments_random_walk import evaluate
 from src.simulation.simulation import run_simulation
 from src.simulation.grid_simulation import init_cone_simulation
 from src.beast_interface import run_beast
-from src.util import mkpath
-
+from src.util import mkpath, parse_arg
 
 LOGGER = logging.getLogger('experiment')
 
@@ -81,14 +80,11 @@ def run_experiment(n_steps, grid_size, cone_angle, split_size_range,
 
 
 if __name__ == '__main__':
-    N_REPEAT = 60
     HPD_VALUES = [80, 95]
 
     # MOVEMENT MODEL
-    if len(sys.argv) > 1:
-        MOVEMENT_MODEL = sys.argv[1]
-    else:
-        MOVEMENT_MODEL = 'rdrw'
+    MOVEMENT_MODEL = parse_arg(1, 'rrw')
+    N_REPEAT = parse_arg(2, 60, int)
 
     # Set working directory
     WORKING_DIR = 'experiments/constrained_expansion/%s/' % MOVEMENT_MODEL

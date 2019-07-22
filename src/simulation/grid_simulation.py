@@ -29,6 +29,10 @@ def neighbourhood(cells):
     return binary_dilation(cells) ^ cells
 
 
+def get_neighbours(i, j):
+    return [(i - 1, j), (i + 1, j), (i, j - 1), (i, j + 1)]
+
+
 def grid_to_index_tuples(cells):
     """Transform a binary grid into a list of cell indices."""
     return list(zip(*np.nonzero(cells)))
@@ -93,10 +97,11 @@ class GridArea(object):
         return self.cells.shape
 
     def add_cell(self, i, j):
+        # TODO Add sparse adjacency matrix/list to world
         self.cells[i, j] = True
         self.neighbourhood[i, j] = False
-        for i2, j2 in [(i-1, j), (i+1, j), (i, j-1), (i, j+1)]:
-            if (0 < i2 < self.shape[0]) and (0 < j2 < self.shape[1]):
+        for i2, j2 in get_neighbours(i, j):
+            if (0 <= i2 < self.shape[0]) and (0 <= j2 < self.shape[1]):
                 if self.cells[i2, j2]:
                     self.neighbourhood[i2, j2] = True
 
@@ -140,8 +145,9 @@ class GridState(State):
 
     @property
     def location(self):
-        cell_locations = grid_to_index_tuples(self.cells)
-        return np.mean(cell_locations, axis=0)[::-1]
+        cell_indices = grid_to_index_tuples(self.cells)
+        mean_index = np.mean(cell_indices, axis=0)[::-1]
+        return self.world.km_per_cell * mean_index
 
     @property
     def grid_size(self):
@@ -234,7 +240,7 @@ class GridWorld(World):
             already occupied by any site.
     """
 
-    def __init__(self, grid_size, occupancy_grid=None):
+    def __init__(self, grid_size, occupancy_grid=None, km_per_cell=1.):
         super(GridWorld, self).__init__()
         self.grid_size = grid_size
         if occupancy_grid is None:
@@ -242,6 +248,8 @@ class GridWorld(World):
         else:
             assert occupancy_grid.shape == grid_size
             self.occupancy_grid = occupancy_grid
+
+        self.km_per_cell = km_per_cell
 
         # self.site_grid
 
@@ -275,7 +283,7 @@ def plot_gridtree(tree, colors, img=None):
     for i, state in enumerate(tree.iter_descendants()):
         img[state.cells] = colors[i]
 
-    plt.imshow(img, origin='lower')
+    # plt.imshow(img, origin='lower')
 
     for parent, child in tree.iter_edges():
         plot_edge(parent, child, no_arrow=False, lw=0.2, color='k')
@@ -304,7 +312,8 @@ def init_bantu_simulation():
     return world, s0, img_color[:, :, :3]
 
 
-def init_empty_simulation(grid_size, p_grow_distr, min_margin = 50, split_size_range=(45,50)):
+def init_empty_simulation(grid_size, p_grow_distr, min_margin = 50,
+                          split_size_range=(45,50), km_per_cell=100.):
 
     # Init world
     world = GridWorld(grid_size)
@@ -315,7 +324,7 @@ def init_empty_simulation(grid_size, p_grow_distr, min_margin = 50, split_size_r
     i = np.random.randint(min_margin, w - min_margin)
     j = np.random.randint(min_margin, h - min_margin)
     a[i, j] = True
-    s0 = GridState(world, a, p_grow_distr, split_size_range)
+    s0 = GridState(world, a, p_grow_distr, split_size_range, km_per_cell=km_per_cell)
     world.set_root(s0)
 
     # Grow zone to initial size
@@ -337,13 +346,14 @@ def filter_norm(x, y, max_norm):
     return norms <= max_norm
 
 
-def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5, split_size_range=(45, 50)):
+def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5,
+                         split_size_range=(45, 50), km_per_cell=100.):
     H, W = grid_size
     cx = (W-1) / 2
     cy = (H-1) / 2
 
     # Init world
-    world = GridWorld(grid_size)
+    world = GridWorld(grid_size, km_per_cell=km_per_cell)
     y, x = np.mgrid[:H, :W]
     x = x - cx
     y = y - cy
@@ -459,7 +469,7 @@ if __name__ == '__main__':
     WORKING_DIR = 'data/gridworld/'
     XML_PATH = WORKING_DIR + 'nowhere.xml'
     TREE_PATH = WORKING_DIR + 'nowhere.tree'
-    exp_dir = experiment_preperations(WORKING_DIR)
+    exp_dir = experiment_preperations(WORKING_DIR, seed=369388681)
 
     # Analysis Parameters
     CHAIN_LENGTH = 150000
@@ -478,11 +488,17 @@ if __name__ == '__main__':
     n = int(N / (CONE_ANGLE ** .5))
     world, root, img = init_cone_simulation(grid_size=(n, n), p_grow_distr=P_GROW_DISTR,
                                             cone_angle=CONE_ANGLE,
-                                            split_size_range=SPLIT_SIZE_RANGE)
+                                            split_size_range=SPLIT_SIZE_RANGE,
+                                            km_per_cell=100.)
     run_simulation(int(N_STEPS), root, world)
     tree = root
 
     print(tree.n_leafs())
+    leafs_mean = np.mean(tree.get_leaf_locations(), axis=0)
+    leafs_mean_offset = leafs_mean - root.location
+    print(leafs_mean_offset)
+    print(np.hypot(*leafs_mean_offset))
+
 
     # tree_sizes = []
     # cone_areas = []
@@ -525,19 +541,19 @@ if __name__ == '__main__':
 
     # Show plot of the simulation run (whole tree in grey, subtree in color)
     # img = plot_gridtree(root, GREY_TONES)
-    plot_gridtree(tree, COLORS_RGB, img=img)
-
-    plt.imshow(img, origin='lower')
-    plt.axis('off')
-    plt.tight_layout(pad=0.)
-    plt.show()
-
-    # Create an XML file as input for the BEAST analysis
-    tree.write_beast_xml(output_path=XML_PATH, chain_length=CHAIN_LENGTH, movement_model='rrw')
-
-    # Run BEAST analysis
-    run_beast(working_dir=WORKING_DIR)
-    run_treeannotator(HPD, BURNIN, working_dir=WORKING_DIR)
+    # plot_gridtree(tree, COLORS_RGB, img=img)
+    #
+    # # plt.imshow(img, origin='lower')
+    # plt.axis('off')
+    # plt.tight_layout(pad=0.)
+    # plt.show()
+    #
+    # # Create an XML file as input for the BEAST analysis
+    # tree.write_beast_xml(output_path=XML_PATH, chain_length=CHAIN_LENGTH, movement_model='rrw')
+    #
+    # # Run BEAST analysis
+    # run_beast(working_dir=WORKING_DIR)
+    # run_treeannotator(HPD, BURNIN, working_dir=WORKING_DIR)
 
     # Show original tree
     plot_tree(tree, color='k', lw=0.2)
@@ -545,12 +561,12 @@ if __name__ == '__main__':
     plt.scatter(*tree.get_leaf_locations().T, c='darkblue', s=3.)
 
     # # Show reconstructed tree
-    reconstructed = load_tree_from_nexus(tree_path=TREE_PATH)
-    plot_root(reconstructed.location, color=COLOR_ROOT_EST)
-    plot_hpd(reconstructed, HPD, alpha=0.5)
+    # reconstructed = load_tree_from_nexus(tree_path=TREE_PATH)
+    # plot_root(reconstructed.location, color=COLOR_ROOT_EST)
+    # plot_hpd(reconstructed, HPD, alpha=0.5)
 
-    img_gray = np.mean(img, axis=-1)
-    plt.imshow(img_gray, origin='lower', cmap='gray')
+    # img_gray = np.mean(img, axis=-1)
+    # plt.imshow(img_gray, origin='lower', cmap='gray')
 
     plt.axis('off')
     plt.tight_layout(pad=0.)

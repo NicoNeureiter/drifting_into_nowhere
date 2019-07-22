@@ -252,7 +252,7 @@ class SubprocessException(Exception):
     pass
 
 
-def experiment_preperations(work_dir):
+def experiment_preperations(work_dir, seed=None):
     # Ensure working directory exists
     now = datetime.datetime.now()
     exp_dir = os.path.join(work_dir, 'experiment_logs_%s/' % now)
@@ -265,8 +265,8 @@ def experiment_preperations(work_dir):
     shutil.copy('src/config.py', exp_dir)
 
     # Generate random seed
-    seed = random.randint(0, 1e9)
-    # seed = 579529824
+    if seed is None:
+        seed = random.randint(0, 1e9)
 
     # Set it in built-in random and numpy.random
     random.seed(seed)

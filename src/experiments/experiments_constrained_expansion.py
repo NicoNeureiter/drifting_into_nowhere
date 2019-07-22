@@ -123,7 +123,7 @@ if __name__ == '__main__':
         json.dump(default_settings, json_file)
 
     # Run the experiment
-    variable_parameters = {'cone_angle': np.linspace(0.2,2,10) * np.pi}
+    variable_parameters = {'cone_angle': np.linspace(0.2,2,12) * np.pi}
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, N_REPEAT, WORKING_DIR)
     experiment.run(resume=1)

@@ -44,11 +44,11 @@ def plot_error_stats(simulation, movement_model, fossil_age=None,
 
     results = results.groupby(x_name).mean()
     x = results.index
-    results['total_bias'] = np.hypot(results['mean_offset_x'],
-                                     results['mean_offset_y'])
-    results['empirical_drift'] = np.hypot(results['observed_drift_x'],
+    results['bias'] = np.hypot(results['bias_x'],
+                               results['bias_y'])
+    results['observed_drift'] = np.hypot(results['observed_drift_x'],
                                           results['observed_drift_y'])
-    for metric in ['rmse', 'total_bias', 'empirical_drift']:  # 'total_bias'
+    for metric in ['bias', 'observed_drift']:  # 'rmse'
         ax.plot(x, results[metric], label=metric)
 
     ax.set_xlabel(x_name)
@@ -65,20 +65,20 @@ def plot_error_stats_by_empirical_drift(simulation, movement_model, fossil_age=N
     results = pd.read_csv(results_csv_path)
     results = results*100.
 
-    x = results['observed_drift']
-    for metric in ['rmse', 'bias']:
-        ax.scatter(x, results[metric], label=metric, s=6.)
+    x = results['observed_drift_norm']
+    for metric in ['rmse', 'bias_norm']:
+        ax.scatter(x, results[metric].values, s=6.)
 
     results = results.groupby(x_name).mean()
-    results['total_bias'] = np.hypot(results['mean_offset_x'],
-                                     results['mean_offset_y'])
-    results['empirical_drift'] = np.hypot(results['observed_drift_x'],
+    results['bias'] = np.hypot(results['bias_x'],
+                                     results['bias_y'])
+    results['observed_drift'] = np.hypot(results['observed_drift_x'],
                                           results['observed_drift_y'])
-    x = results['empirical_drift']
-    for metric in ['rmse', 'total_bias']:
+    x = results['observed_drift']
+    for metric in ['rmse', 'bias']:
         ax.plot(x, results[metric], label=metric)
 
-    ax.set_xlabel('empirical_drift')
+    ax.set_xlabel('observed_drift')
 
 
 def set_row_labels(axes, labels):
@@ -93,8 +93,8 @@ def set_column_labels(axes, labels):
 
 if __name__ == '__main__':
     CE = 'constrained_expansion'
-    RW = 'random_walk'
-    SIMULATION = CE
+    RW = '_random_walk'
+    SIMULATION = RW
 
     HPD_VALUES = [80, 95]
     # MOVEMENT_MODEL = 'brownian'
@@ -107,24 +107,27 @@ if __name__ == '__main__':
     else:
         raise ValueError('Unknown simulation type: %s' % SIMULATION)
 
-    # MOVEMENT_MODELS = ['rrw', 'cdrw']
-    # FOSSIL_AGES = [0., 200., np.inf]
-    # fig, axes = plt.subplots(len(MOVEMENT_MODELS), len(FOSSIL_AGES),
-    #                          sharex=True, sharey=True)
-    #
-    # for i, mm in enumerate(MOVEMENT_MODELS):
-    #     for j, foss_age in enumerate(FOSSIL_AGES):
-    #         # plot_error_stats(SIMULATION, mm, fossil_age=foss_age, x_name=x_name,
-    #         #                  ax=axes[i,j])
-    #         plot_hpd_coverages(HPD_VALUES, SIMULATION, mm, fossil_age=foss_age,
-    #                            x_name=x_name, ax=axes[i,j])
-    #
-    # set_row_labels(axes, MOVEMENT_MODELS)
-    # set_column_labels(axes, ['Max. fossil age: %s' % age for age in FOSSIL_AGES])
+    MOVEMENT_MODELS = ['rrw', 'cdrw', 'rdrw']
+    FOSSIL_AGES = [0., 200., np.inf]
+    fig, axes = plt.subplots(len(MOVEMENT_MODELS), len(FOSSIL_AGES),
+                             sharex=True, sharey=True)
+    if len(FOSSIL_AGES) == 1:
+        axes = axes[:, np.newaxis]
+
+    for i, mm in enumerate(MOVEMENT_MODELS):
+        for j, foss_age in enumerate(FOSSIL_AGES):
+            plot_error_stats(SIMULATION, mm, fossil_age=foss_age, x_name=x_name,
+                             ax=axes[i,j])
+            # plot_hpd_coverages(HPD_VALUES, SIMULATION, mm, fossil_age=foss_age,
+            #                    x_name=x_name, ax=axes[i,j])
+            # plot_error_stats_by_empirical_drift(SIMULATION, mm, x_name=x_name, ax=axes[i,j])
+
+    set_row_labels(axes, MOVEMENT_MODELS)
+    set_column_labels(axes, ['Max. fossil age: %s' % age for age in FOSSIL_AGES])
 
 
-    # plot_error_stats(SIMULATION, MOVEMENT_MODEL, x_name=x_name, fossil_age=0)
-    plot_error_stats_by_empirical_drift(SIMULATION, MOVEMENT_MODEL, x_name=x_name)
+    # plot_error_stats(SIMULATION, MOVEMENT_MODEL, x_name=x_name, fossil_age=None)
+    # plot_error_stats_by_empirical_drift(SIMULATION, MOVEMENT_MODEL, x_name=x_name)
 
     plt.legend()
     plt.ylim(0, None)
@@ -132,6 +135,7 @@ if __name__ == '__main__':
         plt.xlim(0, 6000)
     else:
         # plt.xlim(0, 2*np.pi)
-        plt.xlim(0, 7250)
+        # plt.xlim(0, 7250)
+        plt.xlim(0, None)
     plt.tight_layout()
     plt.show()

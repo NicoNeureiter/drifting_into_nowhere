@@ -17,10 +17,6 @@ CHECKLIST_FILE_NAME = 'checklist.txt'
 RESULTS_FILE_NAME = 'results.csv'
 
 
-def format_params(params):
-    return ','.join(['%s=%s' % (k,v) for k, v in params.items()])
-
-
 class Experiment(object):
 
     """Experiment class, which handles iteration over parameter grids,
@@ -59,7 +55,6 @@ class Experiment(object):
     def var_param_names(self):
         return list(self.variable_param_options.keys())
 
-
     @property
     def columns(self):
         return self.var_param_names + self.eval_metrics
@@ -76,7 +71,7 @@ class Experiment(object):
         grid = ParameterGrid(self.variable_param_options)
         pipeline_args = dict(self.fixed_params, working_dir=self.working_directory)
         for var_params in grid:
-            run_id = format_params(var_params)
+            run_id = self.format_params(var_params)
             LOGGER.info('\nRun experiment with settings: %s' % run_id)
             if run_id in checklist:
                 LOGGER.info('\tExperiment already in checklis.')
@@ -120,5 +115,8 @@ class Experiment(object):
             results_file.write(','.join(row_data) + '\n')
 
         with open(checklist_path, 'a') as checklist_file:
-            run_id = format_params(var_params)
+            run_id = self.format_params(var_params)
             checklist_file.write(run_id + '\n')
+
+    def format_params(self, params: dict):
+        return ','.join(['%s=%s' % (k, params[k]) for k in self.variable_param_options.keys()])

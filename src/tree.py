@@ -40,7 +40,20 @@ class Tree(object):
         for child in self.children:
             child.parent = self
 
+        self.color = None
+
     def get_subtree(self, subtree_path: list):
+        """Compute the subtree defined the indices in subtree path.
+
+        Args:
+            subtree_path (list[int]): A list of indices, which specify the child
+                at each node along the path to the requested subtree.
+                E.g.: [0,1,1] would be the second child of the second child of
+                the first child of this tree.
+
+        Returns:
+            Tree: The specified subtree.
+        """
         if len(subtree_path) == 0:
             return self
         else:
@@ -60,51 +73,125 @@ class Tree(object):
 
     @property
     def alignment(self):
-        return self._alignment  # TODO
+        return self._alignment
 
     @alignment.setter
     def alignment(self, alignment):
         # self._alignment = np.asarray(alignment)
         self._alignment = alignment
 
-    # TODO turn into getter (it's not O(1))
-    # TODO caching?
+    # TODO Refactor: Should not be a property (it's not O(1))
     @property
-    def height(self):
+    def depth(self):
+        """The depth is defined as the length of the path up from the current
+        node to the root (sum of lengths).
+
+        Returns:
+
+        """
         if self.parent is None:
             return self.length
         else:
-            return self.parent.height + self.length
+            return self.parent.depth + self.length
+
+    def height(self):
+        """The height is defined as the longest path down from the current node
+        to a leaf (sum of lengths).
+
+        Returns:
+            float: The height of the current node.
+        """
+        if self.is_leaf():
+            return 0
+        else:
+            return max(c.height() + c.length for c in self.children)
 
     def tree_size(self):
+        """
+        Returns:
+            int: The number of nodes (internal + leafs) of the current tree.
+        """
         size = 1
         for c in self.children:
             size += c.tree_size()
         return size
 
     def n_leafs(self):
+        """
+        Returns:
+            int: The number of leafs in the current tree.
+        """
         size = 1 if self.is_leaf() else 0
         for c in self.children:
             size += c.n_leafs()
         return size
 
     def is_leaf(self):
+        """
+        Returns:
+            bool: Is this node a leaf?
+        """
         return len(self.children) == 0
 
+    def root(self):
+        """Get the root of the current tree (iterate parent of the parent of...)
+        Returns:
+              Tree: Root of the current node.
+        """
+        if self.parent is None:
+            return self
+        else:
+            return self.parent.root()
+
+    def n_fossils(self):
+        """Count the fossils in the current tree. A fossil is a leaf that is not
+        at the maximal depth (i.e. `contemporary`).
+
+        Returns:
+            int: Number of fossils.
+        """
+        max_depth = self.root().height()
+        return len([n for n in self.iter_leafs() if n.depth < max_depth])
+
     def add_child(self, child):
+        """Add a child to the current node."""
         self.children.append(child)
         child.parent = self
 
     def get_descendant_locations(self):
+        """Get the locations of all descendant of the current tree as a numpy
+        array.
+
+        Returns:
+            np.array: Locations of all descendants.
+                shape: (tree_size, 2)
+        """
         return np.array([node.location for node in self.iter_descendants()])
 
     def get_leaf_locations(self):
+        """Get the locations of all leaf nodes in the current tree as a numpy
+        array.
+
+        Returns:
+            np.array: Locations of all leafs.
+                shape: (n_leafs, 2)
+        """
         return np.array([node.location for node in self.iter_leafs()])
 
     def small_child(self):
+        """Get the smallest child in the list (measured by Tree.tree_size).
+
+        Returns:
+            Tree: The smallest child.
+        """
         return min(self.children, key=self.__class__.tree_size)
 
     def big_child(self):
+        """Get the biggest child in the list (measured by Tree.tree_size).
+
+        Returns:
+            Tree: The biggest child.
+        """
         return max(self.children, key=self.__class__.tree_size)
 
     def set_attribute_type(self, key, Type):
@@ -117,24 +204,45 @@ class Tree(object):
         for child in self.children:
             child.set_location_attribute(location_attribute)
 
+    def rescale_by(self, factor):
+        """Rescale the height of the tree by the given factor (equally on each
+        branch).
+
+        Args:
+            factor (float): Scaling factor.
+        """
+        for node in self.iter_descendants():
+            node.length *= factor
+
+    def rescale_to(self, target_height):
+        """Rescale the height of the tree to the given ´target_height´ (equally
+        on each branch).
+
+        Args:
+            target_height (float): The target height.
+        """
+        factor = target_height / self.height()
+        self.rescale_by(factor)
+
     def drop_fossils(self, max_age=0.):
         """Remove all fossils older than ´max_age´."""
         if max_age == np.inf:
             return
 
         leafs = list(self.iter_leafs())
-        t_final = max(node.height for node in leafs)
+        t_final = self.root().height()
 
         too_old = []
         for node in leafs:
-            if node.height < t_final - max_age:
+            if node.depth < t_final - max_age:
                 too_old.append(node)
-        print('Number of fossils:', len(too_old))
+
         self.remove_nodes(too_old)
 
 
     @staticmethod
-    def from_newick(newick, location_key='location', swap_xy=False, with_attributes=True):
+    def from_newick(newick, location_key='location', swap_xy=False, with_attributes=True,
+                    translate=None):
         """Create a tree from the Newick representation.
 
         Args:
@@ -143,7 +251,13 @@ class Tree(object):
         Returns:
             Tree: The parsed tree.
         """
-        newick = remove_whitespace(newick).lower()
+        if translate is None:
+            translate = lambda x: x
+        if isinstance(translate, dict):
+            translate_dict = translate
+            translate = lambda x: translate_dict.get(x, x)
+
+        newick = remove_whitespace(newick)
 
         hpd_pattern = r'%hpd_1={'
         p_hpd = None
@@ -154,7 +268,7 @@ class Tree(object):
             p_hpd = int(p_hpd_str)
 
         tree, _ = parse_tree(newick, location_key=location_key, swap_xy=swap_xy,
-                             with_attributes=with_attributes)
+                             with_attributes=with_attributes, name_mapping=translate)
         if p_hpd is not None:
             tree.p_hpd = p_hpd
 
@@ -290,32 +404,41 @@ class Tree(object):
 
             if p is None:
                 # self is root -> single child becomes the root
-                print(self.height, [cc.height for cc in c.children])
-                prev_len = self.length
+                # prev_len = self.length
                 self.copy_other_node(c)
-                self.length += prev_len
+                # self.length += prev_len
+                self.length = 0
                 self.parent = None
-                print(self.height, [cc.height for cc in self.children])
             else:
                 # Replace self by c in parent.children
                 # (self is skipped -> length must be adapted)
-                c_prev_height = c.height
+                c_prev_height = c.depth
 
                 self_idx = p.children.index(self)
                 p.children[self_idx] = c
                 c.parent = p
                 c.length += self.length
 
-                assert c.height == c_prev_height
+                assert np.isclose(c.depth, c_prev_height)
 
-    def to_newick(self, write_attributes=True):
+    def to_newick(self, write_attributes=True, translate=None):
         """Compute a Newick string representation of the tree."""
+        if translate is None:
+            translate = lambda x: x
+        if isinstance(translate, dict):
+            translate_dict = translate
+            translate = lambda x: translate_dict.get(x, x)
+
         if self.children:
-            children = ','.join([c.to_newick(write_attributes=write_attributes)
-                                 for c in self.children])
-            core = '(%s)' % children
+            child_newicks = []
+            for c in self.children:
+                c_newick = c.to_newick(write_attributes=write_attributes,
+                                             translate=translate)
+                child_newicks.append(c_newick)
+            core = '(' + ','.join(child_newicks) + ')'
+            core += translate(self.name)
         else:
-            core = self.name
+            core = translate(self.name)
 
         attr_str = ''
         if self.attributes and write_attributes:
@@ -323,6 +446,36 @@ class Tree(object):
             attr_str = '[&%s]' % attr_str
 
         return '{core}{attrs}:{len}'.format(core=core, attrs=attr_str, len=self.length)
+
+    def to_nexus(self, fname, write_attributes=True):
+        taxa = []
+        for n in self.iter_descendants():
+            if n.name == '':
+                assert not n.is_leaf()
+            else:
+                taxa.append(n.name)
+
+        translate = dict(map(reversed, enumerate(taxa)))
+        print(translate)
+        taxa_lines = ['\t\t%s %s' % (i, name) for i, name in enumerate(taxa)]
+        tree_line = '\ttree TREE = %s;' % self.to_newick(translate=translate,
+                                                         write_attributes=write_attributes)
+
+        lines = [
+            '#NEXUS', '',
+            # 'begin taxa;',
+            # '\tdimension ntax=%i;' % len(taxa),
+            # '\ttaxlabels',
+            # *taxa_lines,
+            # ';', 'end;', '',
+            'begin trees;',
+            '\ttranslate',
+            ',\n'.join(taxa_lines) + ';',
+            tree_line,
+            'end;']
+
+        with open(fname, 'w') as nexus:
+            nexus.write('\n'.join(lines))
 
     def copy_other_node(self, other):
         # TODO Iterate over attrs?
@@ -340,7 +493,7 @@ class Tree(object):
     def _format_location(self):
         # print(self.name)
         x, y = self.location
-        return LOCATION_TEMPLATE.format(id=self.name, x=x, y=y, age=self.height)
+        return LOCATION_TEMPLATE.format(id=self.name, x=x, y=y, age=self.depth)
 
     def _format_alignment(self):
         alignment_str = str_concat_array(self.alignment)
@@ -437,8 +590,8 @@ class Tree(object):
 
     def iter_descendants(self):
         """Iterate over all nodes in the tree.
-        Returns:
-            Generator[Tree]: Yields each node of the tree in depth-first order.
+        Yields:
+            Tree: Each node of the tree in depth-first order.
         """
         yield self
         for c in self.children:
@@ -457,30 +610,52 @@ class Tree(object):
         return self.name
 
 
-def node_imbalance(node: Tree):
+def node_imbalance(node: Tree, ret_weight=True):
     assert len(node.children) <= 2, node.children
-    if len(node.children) < 2:
-        return 0
-    if node.tree_size() < 4:
-        return 0
 
-    c1, c2 = node.children
+    size = node.n_leafs()
 
-    size = node.tree_size()
-    bigger = max(c1.tree_size(), c2.tree_size())
-    m = np.ceil(size / 2)
+    if (len(node.children) < 2) or (size < 4):
+        I = np.nan
+    else:
+        c1, c2 = node.children
 
-    return (bigger - m) / (size - m - 1)
+        bigger = max(c1.n_leafs(), c2.n_leafs())
+        m = np.ceil(size / 2)
+
+        I = (bigger - m) / (size - m - 1)
+
+    if not ret_weight:
+        return I
+    else:
+        if size % 2 == 1:   # odd
+            w = 1
+        else:               # even
+            w = 1 - 1 / size
+            if I == 0:
+                w *= 2
+            else:
+                assert (I is np.nan) or (I > 0), I
+        return I, w
 
 
-def tree_imbalance(root):
+def tree_imbalance(root, max_depth=None):
     # TODO: According to (Purvis and Agapow 2002) we should use a weighted mean
     # "Purvis and Agapow: Phylogeny imbalance and taxonomic level"
-    node_imbalances = [node_imbalance(n) for n in root.iter_descendants()]
-    return np.mean(node_imbalances)
+
+    nodes = list(root.iter_descendants())
+    if max_depth is not None:
+        nodes = list(filter(lambda n: n.depth < max_depth, nodes))
+    assert len(nodes) > 0  # At least the root itself should be in the list
+
+    node_imbalances, weights = np.array([node_imbalance(n) for n in nodes]).T
+
+    not_na = np.isfinite(node_imbalances)
+    return np.nansum(weights*node_imbalances) / np.sum(weights[not_na])
 
 
-def parse_tree(s, location_key='location', swap_xy=False, with_attributes=True):
+def parse_tree(s, location_key='location', swap_xy=False, with_attributes=True,
+               name_mapping=None):
     """Parse a string in Newick format into a Tree object. The Newick string
     might be partially parsed already, i.e. a suffix of a full Newick tree.
 
@@ -491,6 +666,9 @@ def parse_tree(s, location_key='location', swap_xy=False, with_attributes=True):
         Tree: The parsed Tree object.
         str: The remaining (unparsed) Newick string.
     """
+    if name_mapping is None:
+        name_mapping = lambda x: x
+
     name = ''
     children = []
 
@@ -500,7 +678,7 @@ def parse_tree(s, location_key='location', swap_xy=False, with_attributes=True):
         while s.startswith('(') or s.startswith(','):
             s = s[1:]
             child, s = parse_tree(s, location_key=location_key, swap_xy=swap_xy,
-                                  with_attributes=with_attributes)
+                                  with_attributes=with_attributes, name_mapping=name_mapping)
             children.append(child)
 
         assert s.startswith(')'), '"%s"' % s
@@ -512,7 +690,7 @@ def parse_tree(s, location_key='location', swap_xy=False, with_attributes=True):
             else:
                 name_stop = find(s, ':')
 
-            name = s[:name_stop]
+            name = name_mapping(s[:name_stop])
             s = s[name_stop:]
 
 
@@ -523,7 +701,7 @@ def parse_tree(s, location_key='location', swap_xy=False, with_attributes=True):
         else:
             name_stop = find(s, ':')
 
-        name = s[:name_stop]
+        name = name_mapping(s[:name_stop])
         s = s[name_stop:]
 
     if with_attributes:
@@ -576,6 +754,8 @@ def parse_length(s):
     slen = s[:end]
     if '@' in slen:
         slen = slen[:find(s, '@')]
+    if ';' in slen:
+        slen = slen[:find(s, ';')]
 
     try:
         length = float(slen)
@@ -666,11 +846,11 @@ if __name__ == '__main__':
 
 
 def get_edge_heights(parent, child):
-    return (parent.height + child.height) / 2.
+    return (parent.height() + child.height()) / 2.
 
 
 def get_old_edges(parent, child, threshold=250.):
-    return (parent.height + child.height) / 2. > threshold
+    return (parent.depth + child.depth) / 2. > threshold
 
 
 def angle_to_vector(angle):

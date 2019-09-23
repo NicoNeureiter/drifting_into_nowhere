@@ -27,7 +27,7 @@ COLOR_2 = (0.5, 0.1, 0.4)
 
 
 def plot_early_late_drift(tree: Tree):
-    halftime = tree['height'] / 2
+    halftime = tree['depth'] / 2
 
     angles_early = []
     lengths_early = []
@@ -38,7 +38,7 @@ def plot_early_late_drift(tree: Tree):
 
         length = norm(step)
         angle = atan2(step[1], step[0])
-        height = (parent['height'] + child['height']) / 2.
+        height = (parent['depth'] + child['depth']) / 2.
 
         if height > halftime:
             angles_early.append(angle)
@@ -111,6 +111,7 @@ def flatten(fun, alpha):
         return np.sign(v) * (abs(v) ** alpha)
 
     return flat_fun
+
 
 
 if __name__ == '__main__':
@@ -244,7 +245,7 @@ if __name__ == '__main__':
     # # Plot backbone-splits over time.
     # plot_backbone_splits(tree, plot_edges=False)#, lw=3.)
     def get_space_time_position(node):
-        t = -node.height
+        t = -node.depth
         x = np.dot(node.location, DRIFT_DIRECTION)
         return x, t
 

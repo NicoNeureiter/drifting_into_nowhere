@@ -35,8 +35,8 @@ def plot_height(node, alpha=.6, color='teal', lw=1.):
 
         # x = 0.877*x - 0.479*y
         # cx = 0.877*cx - 0.479*cy
-        y = -node.parent.height
-        cy = -node.height
+        y = node.parent.height()
+        cy = node.height()
 
         plt.plot([x, cx], [y, cy], c=color, alpha=alpha, lw=lw)
     else:
@@ -49,7 +49,7 @@ def _plot_tree(node, alpha=1., plot_height=False, color='teal', lw=1.):
     x, y = node.location
     if plot_height:
         # x = 0.877*x - 0.479*y
-        y = -node.height
+        y = -node.height()
     # plt.scatter([x], [y], c='k', lw=0, alpha=0.5)
 
     if node.children:
@@ -57,7 +57,7 @@ def _plot_tree(node, alpha=1., plot_height=False, color='teal', lw=1.):
             cx, cy = c.location
             if plot_height:
                 # cx = 0.877*cx - 0.479*cy
-                cy = -c.height
+                cy = -c.height()
             plt.plot([x, cx], [y, cy], c=color, lw=lw, alpha=alpha)
             _plot_tree(c, alpha=alpha, plot_height=plot_height, color=color, lw=lw)
 
@@ -73,7 +73,7 @@ def plot_edge(parent, child, no_arrow=False, ax=None,
     cx, cy = get_node_position(child)
     if x != cx or y != cy:
         if no_arrow:
-            return ax.plot([x, cx], [y, cy], c=color, alpha=alpha, **kwargs_arrow)
+            return ax.plot([x, cx], [y, cy], c=color, alpha=alpha, solid_capstyle='round', **kwargs_arrow)
         else:
             width = kwargs_arrow.pop('lw', 0.001)
             return ax.arrow(x, y, (cx - x), (cy - y), length_includes_head=True,
@@ -89,7 +89,8 @@ def plot_tree(tree, color_fun=None, alpha_fun=None, cmap=None,
     if color_fun is not None:
         color_values = [color_fun(*e) for e in tree.iter_edges()]
         if cnorm is None:
-            vmin, vmax = np.quantile(color_values, [0.05, .95])
+            # vmin, vmax = np.quantile(color_values, [0.05, .95])
+            vmin, vmax = np.quantile(color_values, [0.0, 1.])
             cnorm = plt.Normalize(vmin=vmin, vmax=vmax)
             # cnorm = ColorNormalize(vmin=min(color_values),
             #                        vmax=max(color_values))
@@ -102,7 +103,10 @@ def plot_tree(tree, color_fun=None, alpha_fun=None, cmap=None,
     for edge in tree.iter_edges():
         if color_fun is not None:
             c = color_fun(*edge)
-            color = cmap(cnorm(c))
+            if isinstance(c, tuple):
+                color = c
+            else:
+                color = cmap(cnorm(c))
 
         if alpha_fun is not None:
             alpha = anorm(alpha_fun(*edge))
@@ -114,7 +118,10 @@ def plot_tree(tree, color_fun=None, alpha_fun=None, cmap=None,
         edge = tree.parent, tree
         if color_fun is not None:
             c = color_fun(*edge)
-            color = cmap(cnorm(c))
+            if isinstance(c, tuple):
+                color = c
+            else:
+                color = cmap(cnorm(c))
 
         if alpha_fun is not None:
             alpha = anorm(alpha_fun(*edge))
@@ -125,7 +132,13 @@ def plot_tree(tree, color_fun=None, alpha_fun=None, cmap=None,
     if show_colorbar:
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=cnorm)
         sm._A = []
-        plt.colorbar(sm)
+        # plt.colorbar(sm, orientation='horizontal', shrink=0.15, pad=0.05)
+        fig = plt.gcf()
+        cbax = fig.add_axes([0.223, 0.01, 0.025, 0.7])
+        plt.colorbar(sm, orientation='vertical', cax=cbax, ax=ax)  #, label='Years before present')  #, shrink=0.8, pad=0.05)
+        cbax.tick_params(labelsize=20, length=10, width=4)
+        cbax.text(6500, 50, 'Years before present', fontdict={'size': 24})
+        plt.sca(ax)
 
 
 def plot_walk(tree, show_tree=False, show_root=True, show_tips=True, show_nodes=False,
@@ -327,7 +340,7 @@ def plot_hpd(tree, p_hpd, location_key='location', projection=None, ax=None, **k
     kwargs_plt.setdefault('lw', 0)
 
     for polygon in tree.get_hpd(p_hpd, location_key=location_key):
-        xy = polygon.exterior.xy
+        xy = np.asarray(polygon.exterior.xy)
         # print(xy)
         if projection is not None:
             xy = projection(xy.T).T
@@ -415,7 +428,7 @@ def simulation_plots(simulation, tree_rec, save_path=None):
     # Plot tree
     # ax = plot_walk(simulation, show_path=False, show_tree=True, ax=plt.gca(), alpha=0.2)
     walk = simulation.get_location_history()
-    heights = [-s.height for s in simulation.sites]
+    heights = [s.hieght() for s in simulation.sites]
     # plot_tree(simulation.root)
     # plot_tree(tree_rec, color=COLOR_ROOT_EST)
     plot_height(simulation.root)
@@ -557,19 +570,55 @@ def plot_hull_area(hull, locs, c=None, alpha=None, lw=None):
     plt.fill(locs[v, 0], locs[v, 1], c=c, lw=lw, alpha=alpha)
 
 
-def plot_tree_topology(tree, left=0):
-    x = left + tree.n_leafs() / 2.
-    y = -tree.height
-    children_sorted = sorted(tree.children, key=lambda c: c.tree_size())
-    for i, c in enumerate(children_sorted):
-        cy = -c.height
-        cx = left + c.n_leafs() / 2.
-        plot_tree_topology(c, left=left)
+# def plot_tree_topology(tree, left=0, node_plotter=None, ax=None):
+#     if ax is None:
+#         ax = plt.gca()
+#
+#     x = left + tree.n_leafs() / 2.
+#     y = tree.height()
+#     if node_plotter is not None:
+#         node_plotter(tree, x, y, ax=ax)
+#
+#     children_sorted = sorted(tree.children, key=lambda c: c.tree_size())
+#     for i, c in enumerate(children_sorted):
+#         cy = c.height()
+#         cx = left + c.n_leafs() / 2.
+#         plot_tree_topology(c, left=left, node_plotter=node_plotter, ax=ax)
+#
+#         ax.plot([x, cx, cx], [y, y, cy], c='k')
+#
+#         left += c.n_leafs()
 
-        plt.plot([x, cx, cx], [y, y, cy], c='k')
 
-        left += c.n_leafs()
+def plot_tree_topology(tree, left=0, node_plotter=None, ax=None, **plot_kwargs):
+    if ax is None:
+        ax = plt.gca()
 
+    cxs = []
+    cys = []
+    if tree.children:
+        children_sorted = sorted(tree.children, key=lambda c: c.tree_size())
+        for i, c in enumerate(children_sorted):
+            # cy = c.height()
+            # cx = left + c.n_leafs() / 2.
+            cx, cy = plot_tree_topology(c, left=left, node_plotter=node_plotter, ax=ax, **plot_kwargs)
+            cxs.append(cx)
+            cys.append(cy)
+
+            left += c.n_leafs()
+
+        x = np.mean(cxs)
+    else:
+        x = left
+
+    y = tree.height()
+    if node_plotter is not None:
+        node_plotter(tree, x, y, ax=ax)
+
+    for cx, cy in zip(cxs, cys):
+        ax.plot([x, cx, cx], [y, y, cy], c='k', **plot_kwargs)
+
+    return x, y
 
 if __name__ == '__main__':
     plot_rrw_step_pdf()

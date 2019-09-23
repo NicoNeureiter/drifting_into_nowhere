@@ -205,8 +205,8 @@ def str_concat_array(a):
 
 def extract_tree_line(nexus):
     for line in nexus.split('\n'):
-        line = str.lower(line.strip())
-        if line.startswith('tree '):
+        line = line.strip()
+        if line.lower().startswith('tree '):
             return line
 
 
@@ -223,8 +223,8 @@ def transform_tree_coordinates(tree, trafo):
 def time_drift_trafo(node):
     x, y = node.location
     # drft = 0.877 * x - 0.479 * y
-    # return x, -node.height
-    return node.height, y  # + 0.2*x
+    # return x, -node.depth
+    return node.depth, y  # + 0.2*x
 
 
 def unit_vector(rad):

@@ -11,13 +11,12 @@ import scipy
 import numpy as np
 
 from src.experiments.experiment import Experiment
-from src.experiments.experiments_random_walk import evaluate
+from src.evaluation import evaluate, tree_statistics
 from src.simulation.simulation import run_simulation
 from src.simulation.grid_simulation import init_cone_simulation
 from src.beast_interface import run_beast
+from src.tree import tree_imbalance
 from src.util import mkpath, parse_arg
-
-LOGGER = logging.getLogger('experiment')
 
 
 def run_experiment(n_steps, grid_size, cone_angle, split_size_range,
@@ -59,22 +58,25 @@ def run_experiment(n_steps, grid_size, cone_angle, split_size_range,
     run_simulation(n_steps, tree_simu, world)
     root = tree_simu.location
 
-    # Create an XML file as input for the BEAST analysis
-    tree_simu.write_beast_xml(xml_path, chain_length, movement_model=movement_model,
-                              drift_prior_std=1.)
+    if movement_model == 'tree_statistics':
+        results = tree_statistics(tree_simu)
+    else:
+        # Create an XML file as input for the BEAST analysis
+        tree_simu.write_beast_xml(xml_path, chain_length, movement_model=movement_model,
+                                  drift_prior_std=1.)
 
-    # Run phylogeographic reconstruction in BEAST
-    run_beast(working_dir=working_dir)
+        # Run phylogeographic reconstruction in BEAST
+        run_beast(working_dir=working_dir)
 
-    results = evaluate(working_dir, burnin, hpd_values, root)
+        results = evaluate(working_dir, burnin, hpd_values, root)
 
-    # Add statistics about simulated tree (to compare between simulation modes)
-    results['observed_stdev'] = np.hypot(*np.std(tree_simu.get_leaf_locations(), axis=0))
-    leafs_mean = np.mean(tree_simu.get_leaf_locations(), axis=0)
-    leafs_mean_offset = leafs_mean - root
-    results['observed_drift_x'] = leafs_mean_offset[0]
-    results['observed_drift_y'] = leafs_mean_offset[1]
-    results['observed_drift_norm'] = np.hypot(*leafs_mean_offset)
+        # Add statistics about simulated tree (to compare between simulation modes)
+        results['observed_stdev'] = np.hypot(*np.std(tree_simu.get_leaf_locations(), axis=0))
+        leafs_mean = np.mean(tree_simu.get_leaf_locations(), axis=0)
+        leafs_mean_offset = leafs_mean - root
+        results['observed_drift_x'] = leafs_mean_offset[0]
+        results['observed_drift_y'] = leafs_mean_offset[1]
+        results['observed_drift_norm'] = np.hypot(*leafs_mean_offset)
 
     return results
 
@@ -84,7 +86,8 @@ if __name__ == '__main__':
 
     # MOVEMENT MODEL
     MOVEMENT_MODEL = parse_arg(1, 'rrw')
-    N_REPEAT = parse_arg(2, 60, int)
+    # MOVEMENT_MODEL = 'tree_statistics'
+    N_REPEAT = parse_arg(2, 100, int)
 
     # Set working directory
     WORKING_DIR = 'experiments/constrained_expansion/%s/' % MOVEMENT_MODEL
@@ -92,6 +95,7 @@ if __name__ == '__main__':
 
     # Set cwd for logger
     LOGGER_PATH = os.path.join(WORKING_DIR, 'experiment.log')
+    LOGGER = logging.getLogger('experiment')
     LOGGER.setLevel(logging.DEBUG)
     LOGGER.addHandler(logging.StreamHandler(sys.stdout))
     LOGGER.addHandler(logging.FileHandler(LOGGER_PATH))
@@ -114,9 +118,20 @@ if __name__ == '__main__':
     }
     default_settings.update(simulation_settings)
 
-    EVAL_METRICS = ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
-                   ['hpd_%i' % p for p in HPD_VALUES] + \
-                   ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm']
+    if MOVEMENT_MODEL == 'tree_statistics':
+        EVAL_METRICS = [
+            'imbalance', 'size_0', 'size_0_small', 'size_0_big', 'size_1_small',
+            'size_1_big', 'size_2_small', 'size_2_big', 'imbalance_0', 'imbalance_1',
+            'imbalance_2', 'imbalance_3', 'migr_rate_0', 'migr_rate_0_small',
+            'migr_rate_0_big', 'migr_rate_1_small', 'migr_rate_1_big', 'migr_rate_2_small',
+            'migr_rate_2_big', 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big',
+            'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
+            'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small',
+            'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big', ]
+    else:
+        EVAL_METRICS = ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
+                       ['hpd_%i' % p for p in HPD_VALUES] + \
+                       ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm']
 
     # Safe the default settings
     with open(WORKING_DIR+'settings.json', 'w') as json_file:
@@ -124,6 +139,7 @@ if __name__ == '__main__':
 
     # Run the experiment
     variable_parameters = {'cone_angle': np.linspace(0.2,2,12) * np.pi}
+    # variable_parameters = {'cone_angle': np.linspace(0.25,2,8) * np.pi}
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, N_REPEAT, WORKING_DIR)
-    experiment.run(resume=1)
+    experiment.run(resume=0)

@@ -13,20 +13,17 @@ import numpy as np
 from src.experiments.experiment import Experiment
 from src.simulation.simulation import run_simulation
 from src.simulation.vector_simulation import VectorState, VectorWorld
-from src.beast_interface import (run_beast, run_treeannotator, load_trees)
-from src.evaluation import (eval_bias, eval_rmse, eval_stdev, eval_mean_offset)
+from src.beast_interface import (run_beast)
+from src.evaluation import (evaluate, tree_statistics)
 from src.util import (total_drift_2_step_drift, total_diffusion_2_step_var,
                       normalize, mkpath, parse_arg)
-
-
-LOGGER = logging.getLogger('experiment')
 
 
 def run_experiment(n_steps, n_expected_leafs, total_drift,
                    total_diffusion, drift_density, p_settle, drift_direction,
                    chain_length, burnin, hpd_values, working_dir,
                    turnover=0.2, clock_rate=1.0, movement_model='rrw',
-                   max_fossil_age=0, **kwargs):
+                   max_fossil_age=0, min_n_fossils=10, **kwargs):
     """Run an experiment ´n_runs´ times with the specified parameters.
 
     Args:
@@ -47,12 +44,15 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
         burnin (int): MCMC burnin steps in BEAST analysis.
         hpd_values (list): The values for the HPD coverage statistics.
 
-    Keyword Args:
+    Kwargs:
         movement_model (str): The movement to be used in BEAST analysis
             ('rrw' or 'brownian').
         working_dir (str): The working directory in which intermediate files
             will be dumped.
         drop_fossils (bool): Remove extinct taxa from the sampled phylogeny.
+        max_fossil_age (float): Remove all fossils older than this.
+        min_n_fossils (int): If `max_fossil_age` is set: Ensure sampled trees
+            have at least this many fossils.
 
     Returns:
         dict: Statistics of the experiments (different error values).
@@ -96,68 +96,55 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
 
         # Check whether tree satisfies criteria...
         #    Criteria: not too small/big & root has two extant subtrees
-        n_leafs = len([n for n in tree_simu.iter_leafs() if n.height == n_steps])
+        n_leafs = len([n for n in tree_simu.iter_leafs() if n.depth == n_steps])
         valid_tree = (min_leaves < n_leafs < max_leaves)
+        if n_leafs < min_leaves:
+            print('Invalid: Not enough leafs: %i' % n_leafs)
+            continue
+        elif n_leafs > max_leaves:
+            print('Invalid: Too many leafs: %i' % n_leafs)
+            continue
         for c in tree_simu.children:
-            if not any(n.height == n_steps for n in c.iter_leafs()):
+            if not any(n.depth == n_steps for n in c.iter_leafs()):
                 valid_tree = False
+                print('Invalid: One side of the tree died!')
+                break
 
-    tree_simu.drop_fossils(max_fossil_age)
+        if valid_tree and (max_fossil_age > 0):
+            tree_simu.drop_fossils(max_fossil_age)
+            if tree_simu.height() < n_steps:
+                valid_tree = False
+                print('Invalid: Tree lost in height!')
+            elif tree_simu.n_fossils() < min_n_fossils:
+                valid_tree = False
+                print('Invalid: Not enough fossils (only %i)' % tree_simu.n_fossils())
 
-    # Create an XML file as input for the BEAST analysis
-    tree_simu.write_beast_xml(xml_path, chain_length, movement_model=movement_model,
-                              drift_prior_std=1.)
+    print('Valid tree with %i fossils' % tree_simu.n_fossils())
+    if movement_model == 'tree_statistics':
+        results = {}
 
-    # Run phylogeographic reconstruction in BEAST
-    run_beast(working_dir=working_dir)
+    else:
 
-    results = evaluate(working_dir, burnin, hpd_values, root)
+        # Create an XML file as input for the BEAST analysis
+        tree_simu.write_beast_xml(xml_path, chain_length, movement_model=movement_model,
+                                  drift_prior_std=1.)
 
-    # Add statistics about simulated tree (to compare between simulation modes)
-    results['observed_stdev'] = np.hypot(*np.std(tree_simu.get_leaf_locations(), axis=0))
-    leafs_mean = np.mean(tree_simu.get_leaf_locations(), axis=0)
-    leafs_mean_offset = leafs_mean - root
-    results['observed_drift_x'] = leafs_mean_offset[0]
-    results['observed_drift_y'] = leafs_mean_offset[1]
-    results['observed_drift_norm'] = np.hypot(*leafs_mean_offset)
+        # Run phylogeographic reconstruction in BEAST
+        run_beast(working_dir=working_dir)
 
-    return results
+        results = evaluate(working_dir, burnin, hpd_values, root)
 
+        # Add statistics about simulated tree (to compare between simulation modes)
+        results['observed_stdev'] = np.hypot(*np.std(tree_simu.get_leaf_locations(), axis=0))
+        leafs_mean = np.mean(tree_simu.get_leaf_locations(), axis=0)
+        leafs_mean_offset = leafs_mean - root
+        results['observed_drift_x'] = leafs_mean_offset[0]
+        results['observed_drift_y'] = leafs_mean_offset[1]
+        results['observed_drift_norm'] = np.hypot(*leafs_mean_offset)
 
-def evaluate(working_dir, burnin, hpd_values, true_root):
-    results = {}
-    for hpd in hpd_values:
-        # Summarize tree using tree-annotator
-        tree = run_treeannotator(hpd, burnin, working_dir=working_dir)
-
-        # Compute HPD coverage
-        hit = tree.root_in_hpd(true_root, hpd)
-        results['hpd_%i' % hpd] = hit
-        LOGGER.info('\t\tRoot in %i%% HPD: %s' % (hpd, hit))
-
-    # Load posterior trees for other metrics
-    trees = load_trees(working_dir + 'nowhere.trees')
-
-    # Compute and log RMSE
-    rmse = eval_rmse(true_root, trees)
-    results['rmse'] = rmse
-    LOGGER.info('\t\tRMSE: %.2f' % rmse)
-
-    # Compute and log mean offset
-    offset = eval_mean_offset(true_root, trees)
-    results['bias_x'] = offset[0]
-    results['bias_y'] = offset[1]
-    LOGGER.info('\t\tMean offset: (%.2f, %.2f)' % tuple(offset))
-
-    # Compute and log bias
-    bias = eval_bias(true_root, trees)
-    results['bias_norm'] = bias
-    LOGGER.info('\t\tBias: %.2f' % bias)
-
-    # Compute and log standard deviation
-    stdev = eval_stdev(true_root, trees)
-    results['stdev'] = stdev
-    LOGGER.info('\t\tStdev: %.2f' % stdev)
+    # Always include tree stats
+    tree_stats = tree_statistics(tree_simu)
+    results.update(tree_stats)
 
     return results
 
@@ -167,8 +154,9 @@ if __name__ == '__main__':
 
     # Experiment CLI arguments
     MOVEMENT_MODEL = parse_arg(1, 'rrw')
-    MAX_FOSSIL_AGE = parse_arg(2, 0.0, float)
-    N_REPEAT = parse_arg(3, 60, int)
+    # MOVEMENT_MODEL = 'tree_statistics'
+    MAX_FOSSIL_AGE = parse_arg(2, 500.0, float)
+    N_REPEAT = parse_arg(3, 100, int)
 
     # Set working directory
     today = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
@@ -178,6 +166,7 @@ if __name__ == '__main__':
 
     # Set cwd for logger
     LOGGER_PATH = os.path.join(WORKING_DIR, 'experiment.log')
+    LOGGER = logging.getLogger('experiment')
     LOGGER.setLevel(logging.DEBUG)
     LOGGER.addHandler(logging.StreamHandler(sys.stdout))
     LOGGER.addHandler(logging.FileHandler(LOGGER_PATH))
@@ -204,9 +193,22 @@ if __name__ == '__main__':
         'hpd_values': HPD_VALUES
     }
 
-    EVAL_METRICS = ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
-                   ['hpd_%i' % p for p in HPD_VALUES] + \
-                   ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm']
+    TREE_STATS_COLS = [
+        'size', 'n_fossils', 'imbalance', 'size_0_small', 'size_0_big', 'size_1_small',
+        'size_1_big', 'size_2_small', 'size_2_big', 'imbalance_0', 'imbalance_1',
+        'imbalance_2', 'imbalance_3', 'migr_rate_0', 'migr_rate_0_small',
+        'migr_rate_0_big', 'migr_rate_1_small', 'migr_rate_1_big', 'migr_rate_2_small',
+        'migr_rate_2_big', 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big',
+        'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
+        'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small',
+        'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big', ]
+    if MOVEMENT_MODEL == 'tree_statistics':
+        EVAL_METRICS = TREE_STATS_COLS
+    else:
+        EVAL_METRICS = (TREE_STATS_COLS +
+                       ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] +
+                       ['hpd_%i' % p for p in HPD_VALUES] +
+                       ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm'])
 
     # Safe the default settings
     with open(WORKING_DIR+'settings.json', 'w') as json_file:

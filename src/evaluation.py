@@ -7,7 +7,6 @@ import logging
 import numpy as np
 
 from src.beast_interface import run_treeannotator, load_trees
-from src.simulation.grid_simulation import migration_rate, drift_rate, log_diversification_rate
 from src.tree import tree_imbalance, node_imbalance
 from src.util import dist
 
@@ -140,3 +139,28 @@ def evaluate(working_dir, burnin, hpd_values, true_root):
     LOGGER.info('\t\tStdev: %.2f' % stdev)
 
     return results
+
+
+def migration_rate(tree):
+    if tree.is_leaf():
+        return np.nan
+    locs = tree.get_leaf_locations()
+    diffs = locs - tree.location
+    dists = np.linalg.norm(diffs, axis=-1)
+    rates = dists / tree.height()
+    return np.mean(rates)
+
+
+def drift_rate(tree):
+    if tree.is_leaf():
+        return np.nan
+    mean_loc = np.mean(tree.get_leaf_locations(), axis=0)
+    drift = np.linalg.norm(mean_loc - tree.location)
+    return drift / tree.height()
+
+
+def log_diversification_rate(tree):
+    if tree.is_leaf():
+        return np.nan
+    # return (tree.n_leafs() ** (1 / tree.height()) - 1) * 100.
+    return np.log(tree.n_leafs()) / tree.height()

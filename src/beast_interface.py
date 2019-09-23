@@ -61,12 +61,43 @@ def write_locations(simulation, path):
     with open(path, 'w') as locations_file:
         locations_file.write(locations_str)
 
+def read_translation_table(nexus_path):
 
-def load_tree_from_nexus(tree_path, location_key='location'):
+    with open(nexus_path, 'r') as tree_file:
+        for line in tree_file:
+            if line.lower().strip() == 'translate':
+                break
+        else:
+            return None
+
+        name_mapping = {}
+        stop = False
+        for line in tree_file:
+            line = line.strip()
+            if line == ';':
+                return name_mapping
+
+            if line.endswith(';'):
+                stop = True
+            line = line.strip(';').strip(',')
+            key, value = line.split()
+            name_mapping[key] = value
+
+            if stop:
+                return name_mapping
+
+
+def load_tree_from_nexus(tree_path, location_key='location',
+                         use_translation_table=False, name_mapping=None):
+    if use_translation_table == True:
+        name_mapping = read_translation_table(tree_path)
+        print(name_mapping)
+
     with open(tree_path, 'r') as tree_file:
         nexus_str = tree_file.read()
         newick_str = extract_newick_from_nexus(nexus_str)
-        tree = Tree.from_newick(newick_str, location_key=location_key)
+        tree = Tree.from_newick(newick_str, location_key=location_key,
+                                translate=name_mapping)
 
     return tree
 
@@ -112,17 +143,17 @@ def run_treeannotator(hpd, burnin, working_dir,
 
 
 def read_nexus_name_mapping(nexus_str):
-    nexus_lines = nexus_str.lower().split('\n')
+    nexus_lines = nexus_str.split('\n')
 
     for i, line in enumerate(nexus_lines):
         line = line.strip()
-        if line == 'translate':
+        if line.lower() == 'translate':
             break
 
     name_map = {}
     for line in nexus_lines[i+1:]:
         line = line.strip().strip(',')
-        if line == ';' or line.startswith('tree'):
+        if line == ';' or line.lower().startswith('tree'):
             return name_map
         if line.endswith(';'):
             line = line[:-1]

@@ -46,6 +46,8 @@ def tree_statistics(tree):
 
     # The number of fossils (non contemporary leafs) in the tree.
     stats['n_fossils'] = tree.n_fossils()
+    stats['observed_drift'] = observed_drift(tree)
+    stats['observed_drift_x'], stats['observed_drift_y'] = mean_offset(tree)
 
     t0 = tree.small_child()
     t1 = tree.big_child()
@@ -81,6 +83,14 @@ def tree_statistics(tree):
     stats['migr_rate_1_big'] = migration_rate(t11)
     stats['migr_rate_2_small'] = migration_rate(t110)
     stats['migr_rate_2_big'] = migration_rate(t111)
+
+    stats['diffusion_rate_0'] = diffusion_rate(tree)
+    stats['diffusion_rate_0_small'] = diffusion_rate(t0)
+    stats['diffusion_rate_0_big'] = diffusion_rate(t1)
+    stats['diffusion_rate_1_small'] = diffusion_rate(t10)
+    stats['diffusion_rate_1_big'] = diffusion_rate(t11)
+    stats['diffusion_rate_2_small'] = diffusion_rate(t110)
+    stats['diffusion_rate_2_big'] = diffusion_rate(t111)
 
     stats['drift_rate_0'] = drift_rate(tree)
     stats['drift_rate_0_small'] = drift_rate(t0)
@@ -141,6 +151,13 @@ def evaluate(working_dir, burnin, hpd_values, true_root):
     return results
 
 
+def diffusion_rate(tree):
+    locs = tree.get_leaf_locations()
+    std = np.std(locs, axis=0)
+    # print(std)
+    return np.linalg.norm(std)
+
+
 def migration_rate(tree):
     if tree.is_leaf():
         return np.nan
@@ -151,16 +168,23 @@ def migration_rate(tree):
     return np.mean(rates)
 
 
-def drift_rate(tree):
-    if tree.is_leaf():
-        return np.nan
-    mean_loc = np.mean(tree.get_leaf_locations(), axis=0)
-    drift = np.linalg.norm(mean_loc - tree.location)
-    return drift / tree.height()
-
-
 def log_diversification_rate(tree):
     if tree.is_leaf():
         return np.nan
     # return (tree.n_leafs() ** (1 / tree.height()) - 1) * 100.
     return np.log(tree.n_leafs()) / tree.height()
+
+
+def mean_offset(tree):
+    if tree.is_leaf():
+        return np.nan
+    mean_loc = np.mean(tree.get_leaf_locations(), axis=0)
+    return mean_loc - tree.location
+
+
+def observed_drift(tree):
+    return np.linalg.norm(mean_offset(tree))
+
+
+def drift_rate(tree):
+    return observed_drift(tree) / tree.height()

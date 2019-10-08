@@ -93,7 +93,7 @@ def set_column_labels(axes, labels):
 
 if __name__ == '__main__':
     CE = 'constrained_expansion'
-    RW = '_random_walk'
+    RW = 'random_walk'
     SIMULATION = RW
 
     HPD_VALUES = [80, 95]

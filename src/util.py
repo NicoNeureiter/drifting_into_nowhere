@@ -15,6 +15,7 @@ import datetime
 import pysal
 from pysal.lib.weights import Voronoi
 
+from pathlib import Path
 import numpy as np
 
 
@@ -156,13 +157,18 @@ def touch(fname):
     if os.path.exists(fname):
         os.utime(fname, None)
     else:
-        open(fname, 'a').close()
+        open(fname, '+a').close()
 
 
 def mkpath(path):
+    path = Path(path).absolute()
+    print(path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     if not os.path.isdir(path):
-        touch(path)
+        if '.' in path.parts[-1]:
+            touch(path)
+        else:
+            os.mkdir(path)
 
 
 class StringTemplate(object):
@@ -257,12 +263,15 @@ class SubprocessException(Exception):
 
 def experiment_preperations(work_dir, seed=None):
     # Ensure working directory exists
-    now = datetime.datetime.now()
+    now = str(datetime.datetime.now()).replace(' ', '--').replace(':', '-').rpartition('.')[0]
     exp_dir = os.path.join(work_dir, 'experiment_logs_%s/' % now)
+
     mkpath(exp_dir)
+    exp_dir = Path(exp_dir)
 
     # Safe state of current file and config to the experiment folder
     base_file = sys.argv[0]
+    base_file = Path(base_file)
     shutil.copy(base_file, exp_dir)
     shutil.copy(__file__, exp_dir)
     shutil.copy('src/config.py', exp_dir)
@@ -277,7 +286,7 @@ def experiment_preperations(work_dir, seed=None):
 
     # Print and write the seed to a file.
     print('Random seed:', seed)
-    with open(os.path.join(exp_dir, 'seed'), 'w') as seed_file:
+    with exp_dir.joinpath('seed').open('+w') as seed_file:
         seed_file.write(str(seed))
 
     return exp_dir

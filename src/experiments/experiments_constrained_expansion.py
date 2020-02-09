@@ -88,6 +88,7 @@ if __name__ == '__main__':
     # MOVEMENT_MODEL = parse_arg(1, 'rrw')
     MOVEMENT_MODEL = 'tree_statistics'
     N_REPEAT = parse_arg(2, 100, int)
+    MOVEMENT_MODEL = parse_arg(1, MOVEMENT_MODEL)
 
     # Set working directory
     WORKING_DIR = 'experiments/constrained_expansion/%s/' % MOVEMENT_MODEL
@@ -127,6 +128,7 @@ if __name__ == '__main__':
             # 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big', 'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
             # 'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small', 'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big',
             'space_div_dependence', 'clade_overlap', 'deep_imbalance']
+
     else:
         EVAL_METRICS = ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
                        ['hpd_%i' % p for p in HPD_VALUES] + \
@@ -141,4 +143,4 @@ if __name__ == '__main__':
     variable_parameters = {'cone_angle': np.linspace(0.25, 2, 8) * np.pi}
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, N_REPEAT, WORKING_DIR)
-    experiment.run(resume=0)
+    experiment.run(resume=1)

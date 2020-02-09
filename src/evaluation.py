@@ -47,6 +47,8 @@ def tree_statistics(tree):
 
     # The number of fossils (non contemporary leafs) in the tree.
     stats['n_fossils'] = tree.n_fossils()
+    stats['observed_drift'] = observed_drift(tree)
+    stats['observed_drift_x'], stats['observed_drift_y'] = mean_offset(tree)
 
     # Global inbalance stats
     stats['imbalance'] = tree_imbalance(tree)
@@ -119,6 +121,13 @@ def evaluate(working_dir, burnin, hpd_values, true_root):
     return results
 
 
+def diffusion_rate(tree):
+    locs = tree.get_leaf_locations()
+    std = np.std(locs, axis=0)
+    # print(std)
+    return np.linalg.norm(std)
+
+
 def migration_rate(tree):
     if tree.is_leaf():
         return np.nan
@@ -129,12 +138,11 @@ def migration_rate(tree):
     return np.mean(rates)
 
 
-def drift_rate(tree):
+def log_diversification_rate(tree):
     if tree.is_leaf():
         return np.nan
-    mean_loc = np.mean(tree.get_leaf_locations(), axis=0)
-    drift = np.linalg.norm(mean_loc - tree.location)
-    return drift / tree.height()
+    # return (tree.n_leafs() ** (1 / tree.height()) - 1) * 100.
+    return np.log(tree.n_leafs()) / tree.height()
 
 
 def _diffusion_rate(tree, height=None):
@@ -185,3 +193,18 @@ def mean_clade_overlap(clades):
         scores.append(join_count)
 
     return np.mean(scores)
+
+
+def mean_offset(tree):
+    if tree.is_leaf():
+        return np.nan
+    mean_loc = np.mean(tree.get_leaf_locations(), axis=0)
+    return mean_loc - tree.location
+
+
+def observed_drift(tree):
+    return np.linalg.norm(mean_offset(tree))
+
+
+def drift_rate(tree):
+    return observed_drift(tree) / tree.height()

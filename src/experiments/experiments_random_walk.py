@@ -155,9 +155,9 @@ if __name__ == '__main__':
     # Experiment CLI arguments
     MOVEMENT_MODEL = parse_arg(1, 'rrw')
     MOVEMENT_MODEL = 'tree_statistics'
-
-    MAX_FOSSIL_AGE = parse_arg(2, 500.0, float)
+    MAX_FOSSIL_AGE = parse_arg(2, 500, float)
     N_REPEAT = parse_arg(3, 100, int)
+    MAX_FOSSIL_AGE = int(MAX_FOSSIL_AGE)
 
     # Set working directory
     today = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
@@ -203,6 +203,7 @@ if __name__ == '__main__':
         # 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big', 'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
         # 'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small', 'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big',
         'space_div_dependence', 'clade_overlap', 'deep_imbalance']
+
     if MOVEMENT_MODEL == 'tree_statistics':
         EVAL_METRICS = TREE_STATS_COLS
     else:

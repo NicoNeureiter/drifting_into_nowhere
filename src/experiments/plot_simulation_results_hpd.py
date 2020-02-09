@@ -14,13 +14,15 @@ LABELS = {
     'observed_drift': 'Observed trend',
     'rmse': 'RMSE',
     'bias': 'Bias',
+    'hpd_80': '80% HPD',
+    'hpd_95': '95% HPD',
 }
 
 def plot_hpd_coverages(hpd_values, simulation, movement_model, fossil_age=None,
                        x_name='total_drift', ax=None):
     if ax is None:
         ax = plt.gca()
-
+    print(123)
     working_dir = os.path.join('experiments', simulation, movement_model)
     if fossil_age is not None:
         working_dir += '_fossils=%s' % fossil_age
@@ -29,13 +31,27 @@ def plot_hpd_coverages(hpd_values, simulation, movement_model, fossil_age=None,
 
     # results = results.groupby('cone_angle').mean()
     results = results.groupby(x_name).mean()
-    x = results.index
+    print(x_name)
+    print(results)
+    results['observed_drift'] = np.hypot(results['observed_drift_x'],
+                                         results['observed_drift_y'])
+    x = results['observed_drift']
+    print(x)
     for hpd in hpd_values:
         metric = 'hpd_%i'% hpd
         y = results[metric]
-        ax.plot(x, y, label=metric)
+        ax.plot(x, y, label=LABELS[metric])
+    #
+    # results = results.groupby(x_name).mean()
+    # results['bias'] = np.hypot(results['bias_x'],
+    #                                  results['bias_y'])
+    # results['observed_drift'] = np.hypot(results['observed_drift_x'],
+    #                                       results['observed_drift_y'])
+    # x = results['observed_drift']
+    # for metric in ['rmse', 'bias']:
+    #     ax.plot(x, results[metric], label=LABELS[metric])
 
-    ax.set_xlabel(LABELS[x_name], labelpad=LABELPAD_X)
+    ax.set_xlabel(LABELS['observed_drift'], labelpad=LABELPAD_X)
 
 
 def plot_error_stats(simulation, movement_model, fossil_age=None,
@@ -79,7 +95,7 @@ def plot_error_stats_by_empirical_drift(simulation, movement_model, fossil_age=N
 
     results = results.groupby(x_name).mean()
     results['bias'] = np.hypot(results['bias_x'],
-                                     results['bias_y'])
+                               results['bias_y'])
     results['observed_drift'] = np.hypot(results['observed_drift_x'],
                                           results['observed_drift_y'])
     x = results['observed_drift']
@@ -148,32 +164,25 @@ if __name__ == '__main__':
                 col_labels.append('All ancient samples')
         set_column_labels(axes, col_labels)
 
-
     for i, mm in enumerate(MOVEMENT_MODELS):
         for j, foss_age in enumerate(FOSSIL_AGES):
-            # plot_error_stats(SIMULATION, mm, fossil_age=foss_age, x_name=x_name,
-            #                  ax=axes[i,j])
-            # plot_hpd_coverages(HPD_VALUES, SIMULATION, mm, fossil_age=foss_age,
-            #                    x_name=x_name, ax=axes[i,j])
-            plot_error_stats_by_empirical_drift(SIMULATION, mm, fossil_age=foss_age, x_name=x_name, ax=axes[i,j])
+            axes[i,j].axhline(0.8, lw=0.5, c='lightgrey', ls='dashed')
+            axes[i,j].axhline(0.95, lw=0.5, c='lightgrey', ls='dashed')
+            plot_hpd_coverages(HPD_VALUES, SIMULATION, mm, fossil_age=foss_age,
+                               x_name=x_name, ax=axes[i,j])
 
-    set_row_labels(axes, MOVEMENT_MODELS)
-
-
-    # plot_error_stats(SIMULATION, MOVEMENT_MODEL, x_name=x_name, fossil_age=None)
-    # plot_error_stats_by_empirical_drift(SIMULATION, MOVEMENT_MODEL, x_name=x_name)
-
-
-    plt.ylim(0, 9500)
-    plt.gca().set_yticks(np.linspace(0, 8000, 5))
+    plt.ylim(0, 1.008)
+    plt.gca().set_yticks([.2, .4, .6, .8, .95])
+    plt.gca().set_yticklabels(['%i' % (100*y) for y in [.2, .4, .6, .8, .95]])
 
     if SIMULATION == RW:
+        set_row_labels(axes, MOVEMENT_MODELS)
         axes[0, 2].legend(loc=1)
         plt.xlim(0, 5800)
         plt.gca().set_xticks(np.linspace(0, 4000, 3))
         plt.subplots_adjust(left=0.2, right=0.87, top=0.953, bottom=0.095, wspace=0, hspace=0)
     else:
-        axes[0, 0].legend(loc=1)
+        axes[0, 0].legend(loc=4)
         plt.xlim(0, 7000)
         plt.gca().set_xticks(np.linspace(0, 6000, 4))
         plt.subplots_adjust(left=0.25, right=0.82, top=0.953, bottom=0.095, wspace=0, hspace=0)

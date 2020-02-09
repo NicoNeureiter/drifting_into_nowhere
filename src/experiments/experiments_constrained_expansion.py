@@ -85,8 +85,8 @@ if __name__ == '__main__':
     HPD_VALUES = [80, 95]
 
     # MOVEMENT MODEL
-    MOVEMENT_MODEL = parse_arg(1, 'rrw')
-    # MOVEMENT_MODEL = 'tree_statistics'
+    # MOVEMENT_MODEL = parse_arg(1, 'rrw')
+    MOVEMENT_MODEL = 'tree_statistics'
     N_REPEAT = parse_arg(2, 100, int)
 
     # Set working directory
@@ -120,14 +120,13 @@ if __name__ == '__main__':
 
     if MOVEMENT_MODEL == 'tree_statistics':
         EVAL_METRICS = [
-            'imbalance', 'size_0', 'size_0_small', 'size_0_big', 'size_1_small',
-            'size_1_big', 'size_2_small', 'size_2_big', 'imbalance_0', 'imbalance_1',
-            'imbalance_2', 'imbalance_3', 'migr_rate_0', 'migr_rate_0_small',
-            'migr_rate_0_big', 'migr_rate_1_small', 'migr_rate_1_big', 'migr_rate_2_small',
-            'migr_rate_2_big', 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big',
-            'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
-            'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small',
-            'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big', ]
+            'size', 'imbalance',
+            # 'size_0_small', 'size_0_big', 'size_1_small', 'size_1_big', 'size_2_small', 'size_2_big',
+            # 'imbalance_0', 'imbalance_1', 'imbalance_2', 'imbalance_3',
+            # 'migr_rate_0', 'migr_rate_0_small', 'migr_rate_0_big', 'migr_rate_1_small', 'migr_rate_1_big', 'migr_rate_2_small', 'migr_rate_2_big',
+            # 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big', 'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
+            # 'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small', 'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big',
+            'space_div_dependence', 'clade_overlap', 'deep_imbalance']
     else:
         EVAL_METRICS = ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
                        ['hpd_%i' % p for p in HPD_VALUES] + \
@@ -138,8 +137,8 @@ if __name__ == '__main__':
         json.dump(default_settings, json_file)
 
     # Run the experiment
-    variable_parameters = {'cone_angle': np.linspace(0.2,2,12) * np.pi}
-    # variable_parameters = {'cone_angle': np.linspace(0.25,2,8) * np.pi}
+    # variable_parameters = {'cone_angle': np.linspace(0.2,2,12) * np.pi}
+    variable_parameters = {'cone_angle': np.linspace(0.25, 2, 8) * np.pi}
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, N_REPEAT, WORKING_DIR)
     experiment.run(resume=0)

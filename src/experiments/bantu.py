@@ -45,7 +45,7 @@ def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
     if exclude_outgroup:
         tree.remove_nodes_by_name(OUTGROUP_NAMES)
 
-    # tree = tree.get_subtree([1,1,1,1,1,1])
+    tree = tree.big_child().big_child().big_child()
 
     tree.write_beast_xml(xml_path, chain_length, root=root,
                          diffusion_on_a_sphere=True, movement_model=movement_model,
@@ -72,11 +72,10 @@ def write_bantu_sample_xml(xml_path, chain_length, root=None, exclude_outgroup=F
     leafs_without_locations = [node.name for node in tree.iter_leafs() if node.location is None]
     tree.remove_nodes_by_name(leafs_without_locations)
 
-
     if exclude_outgroup:
         tree.remove_nodes_by_name(OUTGROUP_NAMES)
 
-    # tree = tree.get_subtree([1,1,1,1,1,1])
+    # tree = tree.big_child().big_child()
 
     tree.write_beast_xml(xml_path, chain_length, root=root,
                          diffusion_on_a_sphere=True, movement_model=movement_model,
@@ -104,7 +103,7 @@ if __name__ == '__main__':
     ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.4, )
 
     CHAIN_LENGTH = 500000
-    BURNIN = 50000
+    BURNIN = 10000
     HPD = 90
 
     MODEL = 'rrw'
@@ -113,11 +112,13 @@ if __name__ == '__main__':
     ADAPT_HEIGHT = False
     FIX_ROOT = False
 
+    SUFFIX = '_missingClades'
+
     WORKING_DIR = 'data/bantu_{model}_outgroup_{og}_adapttree_{at}_' + \
-                  'adaptheight_{ah}_hpd_{hpd}{fixroot}/'
+                  'adaptheight_{ah}_hpd_{hpd}{fixroot}{suffix}/'
     WORKING_DIR = WORKING_DIR.format(
         model=MODEL, og=USE_OUTGROUP, at=ADAPT_TREE, ah=ADAPT_HEIGHT, hpd=HPD,
-        fixroot='_fixroot' if FIX_ROOT else ''
+        fixroot='_fixroot' if FIX_ROOT else '', suffix=SUFFIX
     )
     BANTU_XML_PATH = WORKING_DIR + 'nowhere.xml'
     GEOJSON_PATH = 'africa.geojson'
@@ -136,28 +137,26 @@ if __name__ == '__main__':
     # from workbench.map_projections import WorldMap
     # locations.
 
+    write_bantu_xml(BANTU_XML_PATH, CHAIN_LENGTH,
+                   root=HOMELAND if FIX_ROOT else None,
+                   exclude_outgroup=not USE_OUTGROUP,
+                   adapt_tree=ADAPT_TREE,
+                   adapt_height=ADAPT_HEIGHT,
+                   movement_model=MODEL)
 
-    # # for i in range(30):
-    # write_bantu_xml(BANTU_XML_PATH, CHAIN_LENGTH,
-    #                    root=HOMELAND if FIX_ROOT else None,
-    #                    exclude_outgroup=not USE_OUTGROUP,
-    #                    adapt_tree=ADAPT_TREE,
-    #                    adapt_height=ADAPT_HEIGHT,
-    #                    movement_model=MODEL)
-    #
-    # # Run the BEAST analysis
-    # run_beast(WORKING_DIR)
-    # run_treeannotator(HPD, BURNIN, WORKING_DIR)
+    # Run the BEAST analysis
+    run_beast(WORKING_DIR)
+    run_treeannotator(HPD, BURNIN, WORKING_DIR)
 
     # Evaluate the results
-    # tree = load_tree_from_nexus(GEO_TREE_PATH)
-    trees = load_trees(GEO_TREES_PATH)
-    # okcool = tree.root_in_hpd(HOMELAND, HPD)
+    tree = load_tree_from_nexus(GEO_TREE_PATH)
+    # trees = load_trees(GEO_TREES_PATH)
+    okcool = tree.root_in_hpd(HOMELAND, HPD)
     # print('\n\nOk cool: %r' % okcool)
 
-    plot_posterior_scatter(trees, s=2., alpha=1.)
-    plt.show()
-    exit()
+    # plot_posterio>r_scatter(trees, s=2., alpha=1.)
+    # plt.show()
+    # exit()
 
     XLIM = (-20, 60)
     YLIM = (-35, 38)

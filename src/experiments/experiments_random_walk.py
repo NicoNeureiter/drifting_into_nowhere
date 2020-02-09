@@ -92,7 +92,7 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
         world = VectorWorld()
         tree_simu = VectorState(world, p0, step_mean, step_var, clock_rate, birth_rate,
                                 drift_frequency=drift_density, death_rate=death_rate)
-        run_simulation(n_steps, tree_simu, world)
+        tree_simu, world = run_simulation(n_steps, tree_simu, world, condition_on_root=True)
 
         # Check whether tree satisfies criteria...
         #    Criteria: not too small/big & root has two extant subtrees
@@ -154,14 +154,16 @@ if __name__ == '__main__':
 
     # Experiment CLI arguments
     MOVEMENT_MODEL = parse_arg(1, 'rrw')
-    # MOVEMENT_MODEL = 'tree_statistics'
+    MOVEMENT_MODEL = 'tree_statistics'
+
     MAX_FOSSIL_AGE = parse_arg(2, 500.0, float)
     N_REPEAT = parse_arg(3, 100, int)
 
     # Set working directory
     today = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
-    WORKING_DIR = 'experiments/random_walk/{mm}_fossils={max_age}/'.format(
-        mm=MOVEMENT_MODEL, max_age=MAX_FOSSIL_AGE)
+    # WORKING_DIR = 'experiments/random_walk/{mm}_fossils={max_age}/'.format(
+    WORKING_DIR = 'experiments/random_walk/{mm}/'.format(
+        mm=MOVEMENT_MODEL)
     mkpath(WORKING_DIR)
 
     # Set cwd for logger
@@ -194,14 +196,13 @@ if __name__ == '__main__':
     }
 
     TREE_STATS_COLS = [
-        'size', 'n_fossils', 'imbalance', 'size_0_small', 'size_0_big', 'size_1_small',
-        'size_1_big', 'size_2_small', 'size_2_big', 'imbalance_0', 'imbalance_1',
-        'imbalance_2', 'imbalance_3', 'migr_rate_0', 'migr_rate_0_small',
-        'migr_rate_0_big', 'migr_rate_1_small', 'migr_rate_1_big', 'migr_rate_2_small',
-        'migr_rate_2_big', 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big',
-        'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
-        'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small',
-        'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big', ]
+        'size', 'n_fossils', 'imbalance',
+        # 'size_0_small', 'size_0_big', 'size_1_small', 'size_1_big', 'size_2_small', 'size_2_big',
+        # 'imbalance_0', 'imbalance_1', 'imbalance_2', 'imbalance_3',
+        # 'migr_rate_0', 'migr_rate_0_small', 'migr_rate_0_big', 'migr_rate_1_small', 'migr_rate_1_big', 'migr_rate_2_small', 'migr_rate_2_big',
+        # 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big', 'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
+        # 'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small', 'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big',
+        'space_div_dependence', 'clade_overlap', 'deep_imbalance']
     if MOVEMENT_MODEL == 'tree_statistics':
         EVAL_METRICS = TREE_STATS_COLS
     else:
@@ -215,9 +216,10 @@ if __name__ == '__main__':
         json.dump(default_settings, json_file)
 
     # Run the experiment
-    total_drift_values = np.linspace(0., 3., 13) * default_settings['total_diffusion']
+    # total_drift_values = np.linspace(0., 3., 13) * default_settings['total_diffusion']
+    total_drift_values = np.linspace(0., 3., 7) * default_settings['total_diffusion']
     variable_parameters = {'total_drift': total_drift_values}
 
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, N_REPEAT, WORKING_DIR)
-    experiment.run(resume=0)
+    experiment.run(resume=1)

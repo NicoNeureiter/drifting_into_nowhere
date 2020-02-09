@@ -16,6 +16,9 @@ from src.simulation.simulation import State
 from src.util import bounding_box, mkpath, grey
 from src.config import *
 
+import matplotlib
+matplotlib.use('Qt5Agg')
+
 PI = np.pi
 TAU = 2 * np.pi
 
@@ -474,19 +477,34 @@ def plot_clades(tree, min_clade_size=5, max_clade_size=50, _i=0):
         return _i
 
 
-def plot_backbone_clades(tree, _i=0):
+def plot_backbone_clades(tree, plot_hull=False, _i=0):
+    c_noclade = grey(0.6)
     if tree.is_leaf():
         plt.scatter(*tree.location, c='k')
         return
 
     clade, rest = tree.children
-    print(clade.tree_size(), rest.tree_size())
+    # print(clade.tree_size(), rest.tree_size())
 
-    plot_tree(clade, color=COLORS[_i])  # , alpha=0.2)
-    plot_tree_hull(clade, COLORS[_i])
+    if clade.n_leafs() > 5:
+        plot_tree(clade, color=COLORS[_i])  # , alpha=0.2)
+        plt.scatter(*clade.get_leaf_locations().T, color=COLORS[_i], s=4.)
+        if plot_hull:
+            plot_tree_hull(clade, COLORS[_i])
+        _i += 1
+    else:
+        plot_tree(clade, color=c_noclade)
+        plt.scatter(*clade.get_leaf_locations().T, color=c_noclade, s=4.)
 
-    plot_edge(tree, rest, lw=0.2, no_arrow=True)
-    plot_backbone_clades(rest, _i=_i+1)
+    plot_edge(tree, rest, lw=None, no_arrow=True, zorder=9)
+
+    if rest.n_leafs() > 20:
+        plot_backbone_clades(rest, plot_hull=plot_hull, _i=_i)
+    else:
+        # plot_tree(rest, color=c_noclade)
+        # plt.scatter(*rest.get_leaf_locations().T, color=c_noclade, s=4.)
+        plot_tree(rest, color=COLORS[_i])
+        plt.scatter(*rest.get_leaf_locations().T, color=COLORS[_i], s=4.)
 
 
 def next_split(tree):
@@ -570,32 +588,13 @@ def plot_hull_area(hull, locs, c=None, alpha=None, lw=None):
     plt.fill(locs[v, 0], locs[v, 1], c=c, lw=lw, alpha=alpha)
 
 
-# def plot_tree_topology(tree, left=0, node_plotter=None, ax=None):
-#     if ax is None:
-#         ax = plt.gca()
-#
-#     x = left + tree.n_leafs() / 2.
-#     y = tree.height()
-#     if node_plotter is not None:
-#         node_plotter(tree, x, y, ax=ax)
-#
-#     children_sorted = sorted(tree.children, key=lambda c: c.tree_size())
-#     for i, c in enumerate(children_sorted):
-#         cy = c.height()
-#         cx = left + c.n_leafs() / 2.
-#         plot_tree_topology(c, left=left, node_plotter=node_plotter, ax=ax)
-#
-#         ax.plot([x, cx, cx], [y, y, cy], c='k')
-#
-#         left += c.n_leafs()
-
-
 def plot_tree_topology(tree, left=0, node_plotter=None, ax=None, **plot_kwargs):
     if ax is None:
         ax = plt.gca()
 
     cxs = []
     cys = []
+    ccs = []
     if tree.children:
         children_sorted = sorted(tree.children, key=lambda c: c.tree_size())
         for i, c in enumerate(children_sorted):
@@ -604,6 +603,11 @@ def plot_tree_topology(tree, left=0, node_plotter=None, ax=None, **plot_kwargs):
             cx, cy = plot_tree_topology(c, left=left, node_plotter=node_plotter, ax=ax, **plot_kwargs)
             cxs.append(cx)
             cys.append(cy)
+
+            if c.color is not None:
+                ccs.append(c.color)
+            else:
+                ccs.append('k')
 
             left += c.n_leafs()
 
@@ -615,10 +619,39 @@ def plot_tree_topology(tree, left=0, node_plotter=None, ax=None, **plot_kwargs):
     if node_plotter is not None:
         node_plotter(tree, x, y, ax=ax)
 
-    for cx, cy in zip(cxs, cys):
-        ax.plot([x, cx, cx], [y, y, cy], c='k', **plot_kwargs)
+    for cx, cy, cc in zip(cxs, cys, ccs):
+        ax.plot([x, cx, cx], [y, y, cy], c=cc, **plot_kwargs)
 
     return x, y
+
+
+def color_tree(tree, color):
+    tree.color = color
+    for c in tree.children:
+        color_tree(c, color)
+
+
+def color_backbone_clades(tree, _i=0):
+    c_noclade = grey(0.65)
+    if tree.is_leaf():
+        tree.color = COLORS[_i]
+        return
+
+    clade, rest = tree.children
+
+    if clade.n_leafs() > 5:
+        color_tree(clade, COLORS[_i])
+        _i += 1
+    else:
+        color_tree(clade, c_noclade)
+
+    if rest.n_leafs() > 30:
+        color_backbone_clades(rest, _i=_i)
+    else:
+        # color_tree(rest, c_noclade)
+        color_tree(rest, COLORS[_i])
+
+    rest.color = grey(0.0)
 
 if __name__ == '__main__':
     plot_rrw_step_pdf()

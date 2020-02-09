@@ -75,7 +75,7 @@ if __name__ == '__main__':
             world = VectorWorld(capacity=1.2 * N_EXPECTED_SOCIETIES)
             root = VectorState(world, p0, step_mean, step_var, CLOCK_RATE, p_split,
                                drift_frequency=DRIFT_DENSITY)
-            run_simulation(N_STEPS, root, world)
+            root, world = run_simulation(N_STEPS, root, world, )
             tree_simu = root
 
             # Create an XML file as input for the BEAST analysis

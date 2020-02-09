@@ -126,7 +126,8 @@ class GridState(State):
     def __init__(self, world, start_cells, p_grow_distr, split_size_range,
                  p_conflict=0.,
                  parent=None, children=None, name='', length=0, age=0):
-        super(GridState, self).__init__(world, parent, children, name, length, age)
+        super(GridState, self).__init__(world, parent=parent, children=children,
+                                        name=name, length=length, age=age)
         self.cells = start_cells
         self.p_grow_distr = p_grow_distr
         self.p_grow = p_grow_distr()
@@ -160,12 +161,12 @@ class GridState(State):
     def death_rate(self):
         return 0.  # TODO implement death
 
-    def step(self):
+    def step(self, last_step=False):
         if not self.stuck:
             if bernoulli(self.p_grow):
                 self.grow()
 
-        super(GridState, self).step()
+        super(GridState, self).step(last_step=last_step)
 
     def grow(self):
         """Extend the current area by a random adjacent cell."""
@@ -369,6 +370,7 @@ def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5,
     a[i, j] = True
     s0 = GridState(world, a, p_grow_distr, split_size_range=split_size_range)
     world.set_root(s0)
+
     # world.occupancy_grid[i,j] = False
 
     # print(i,j)
@@ -571,3 +573,9 @@ if __name__ == '__main__':
     plt.axis('off')
     plt.tight_layout(pad=0.)
     plt.show()
+
+
+
+
+
+

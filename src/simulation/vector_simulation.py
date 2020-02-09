@@ -21,16 +21,12 @@ TREE_MODELS = [YULE, SATURATION, LINEAR]
 TREE_MODEL = TREE_MODELS[0]
 
 
-gauss_samples = collections.defaultdict(list)
-# gaussian = _gaussian
+gauss_samples = collections.deque(list(_gaussian(np.zeros(2), np.eye(2,2), size=1000)))
 def gaussian(mean: np.array, var):
-    cache_key = (tuple(mean), tuple(var.flatten()))
-    if len(gauss_samples[cache_key]) == 0:
-        gauss_samples[cache_key] = list(
-            _gaussian(mean, var, size=1000)
-        )
-
-    return gauss_samples[cache_key].pop()
+    # return _gaussian(mean, var)
+    if len(gauss_samples) == 0:
+        gauss_samples.extend(list(_gaussian(np.zeros(2), np.eye(2,2), size=10000)))
+    return mean + (var**0.5).dot(gauss_samples.pop())
 
 
 class VectorState(State):
@@ -104,7 +100,7 @@ class VectorState(State):
         # else:
         return self._death_rate
 
-    def step(self, step_mean=None, step_cov=None):
+    def step(self, step_mean=None, step_cov=None, last_step=False):
         """Perform a simulation step: Gaussian distribution relative to current
         location. Parameterized by mean, covariance, frequency. super(..) will
         handle random splits and bookkeeping.
@@ -129,7 +125,7 @@ class VectorState(State):
         # Add the new location to the history
         self.location_history.append(self.location)
 
-        super(VectorState, self).step()
+        super(VectorState, self).step(last_step=last_step)
 
     def split_probability(self):
         # splits_per_step = splits_per_year / steps_per_year

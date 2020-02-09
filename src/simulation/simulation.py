@@ -84,12 +84,13 @@ class State(Tree):
         length (float): The age of this specific society (since the last split).
     """
 
-    def __init__(self, world, parent=None, children=None, name='',
+    def __init__(self, world, clock_rate=1., parent=None, children=None, name='',
                  length=0, age=0, location=None):
         super(State, self).__init__(length=length, name=name, children=children,
                                     parent=parent, location=location)
         self.world = world
         self.age = age
+        self.clock_rate = clock_rate
 
     @property
     def name(self):
@@ -99,10 +100,11 @@ class State(Tree):
         Returns:
             str: The name of the state
         """
-        if self.children:
-            return 'fossil_' + self._name
-        else:
-            return 'society_' + self._name
+        return 'n' + self._name
+        # if self.children:
+        #     return 'fossil_' + self._name
+        # else:
+        #     return 'society_' + self._name
 
     @name.setter
     def name(self, name):
@@ -114,15 +116,16 @@ class State(Tree):
         could depend on time, diversity, environmental factors,..."""
         raise NotImplementedError
 
-    def step(self):
+    def step(self, last_step=False):
         # Update length and age
         self.length += 1
         self.age += 1
 
-        if bernoulli(self.death_rate / self.clock_rate):
+        if bernoulli(self.death_rate * self.clock_rate):
             self.die()
         elif bernoulli(self.split_probability()):
-            self.split()
+            if not last_step:
+                self.split()
 
     def split_probability(self):
         raise NotImplementedError
@@ -145,7 +148,33 @@ class State(Tree):
         raise NotImplementedError
 
 
-def run_simulation(n_steps, root, world):
+class BirthDeathState(State):
+
+    def __init__(self, world, birth_rate, death_rate, **kwargs):
+        super(BirthDeathState, self).__init__(world, **kwargs)
+        self.birth_rate = birth_rate
+        self._death_rate = death_rate
+
+    @property
+    def death_rate(self):
+        return self._death_rate
+
+    def split_probability(self):
+        return self.birth_rate * self.clock_rate
+
+    def create_child(self):
+        i = str(len(self.children))
+        child_name = self._name + i
+        child = BirthDeathState(world=self.world,
+                                birth_rate=self.birth_rate, death_rate=self._death_rate,
+                                clock_rate=self.clock_rate,
+                                parent=self, name=child_name, age=self.age)
+
+        return child
+
+
+from copy import deepcopy
+def run_simulation(n_steps, root, world, condition_on_root=False):
     """Run a simulation for n_steps. The starting state is defined by ´root´,
     the environment is defined by ´world´.
 
@@ -155,16 +184,31 @@ def run_simulation(n_steps, root, world):
         world (World): The environment of the simulation, keeping track of all
             states, providing some utility methods, relating to global properties.
     """
+    root_init = deepcopy(root)
+    world_init = deepcopy(world)
+
     # Add the root to the world and perform first split.
     # (a phylogeny always starts with the first split)
     world.set_root(root)
     root.split()
 
     for i_step in range(n_steps):
+        last_step = (i_step == n_steps-1)
         for state in list(world.sites):
-            state.step()
+            state.step(last_step=last_step)
+
+        if condition_on_root:
+            if world.n_sites <= 1:
+                root = root_init
+                world = world_init
+                root.world = world
+                return run_simulation(n_steps, root_init, world_init,
+                                      condition_on_root=condition_on_root)
+
         if world.stop_condition():
             break
+
+    return root, world
 
 
 def run_backbone_simulation(n_steps, root, world, backbone_steps=None):
@@ -202,3 +246,30 @@ def run_backbone_simulation(n_steps, root, world, backbone_steps=None):
     for _ in range(n_steps - backbone_steps):
         for state in list(world.sites):
             state.step()
+
+
+if __name__ == '__main__':
+    import matplotlib.pyplot as plt
+    from src.plotting import plot_tree_topology
+    from src.tree import tree_imbalance
+
+    imbalance_scores = []
+    for _ in range(100):
+        world = World()
+        root = BirthDeathState(world=world, birth_rate=1., death_rate=0., clock_rate=0.05)
+        print(root.name)
+        tree, world = run_simulation(100, root, world, condition_on_root=True)
+        tree.drop_fossils()
+
+        print(tree.n_leafs())
+        imb = tree_imbalance(tree, weight_by_age=True)
+        print(imb)
+
+        if not np.isfinite(imb):
+            plot_tree_topology(tree)
+            plt.show()
+        else:
+            imbalance_scores.append(imb)
+
+    print()
+    print(np.mean(imbalance_scores))

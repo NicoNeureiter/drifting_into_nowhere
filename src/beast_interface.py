@@ -178,10 +178,14 @@ def read_nexus_name_mapping(nexus_str):
     #
     # return name_map
 
-def load_trees(tree_path):
+def load_trees(tree_path, read_name_mapping=False):
     with open(tree_path, 'r') as tree_file:
         nexus_str = tree_file.read().lower().strip()
-    # name_map = read_nexus_name_mapping(nexus_str)
+
+    if read_name_mapping:
+        name_map = read_nexus_name_mapping(nexus_str)
+    else:
+        name_map = None
 
     trees = []
     for line in nexus_str.split('\n'):
@@ -194,7 +198,7 @@ def load_trees(tree_path):
             newick_str = newick_str.replace(']',']:')
             newick_str = newick_str.replace(':;', ';')
 
-            tree = Tree.from_newick(newick_str)
+            tree = Tree.from_newick(newick_str, translate=name_map)
             trees.append(tree)
 
     # print([(t.location, t.attributes) for t in trees])

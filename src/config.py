@@ -32,7 +32,11 @@ class Cycler(object):
 _COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
            '#ffe999', '#802a66', '#058090']
+
 COLORS = Cycler(_COLORS)
+import matplotlib.pyplot as plt
+COLORS = [plt.get_cmap('viridis')(i) for i in range(0,250,10)]
+COLORS = [plt.get_cmap('tab20b')(i) for i in range(20)]
 COLORS_RGB = Cycler([hex_to_rgb(c) for c in _COLORS])
 GREY_TONES = Cycler([(int(255*x),)*3 for x in np.linspace(0.7,0.95, 10)])
 

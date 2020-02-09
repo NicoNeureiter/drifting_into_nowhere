@@ -261,7 +261,7 @@
 		</log>
 
 		<!-- write log to file                                                       -->
-		<log id="fileLog" logEvery="1000" fileName="nowhere.log" overwrite="true">
+		<log id="fileLog" logEvery="500" fileName="nowhere.log" overwrite="true">
 			<posterior idref="posterior"/>
 			<prior idref="prior"/>
 			<likelihood idref="likelihood"/>
@@ -281,14 +281,7 @@
 			<!-- END Multivariate diffusion model                                        -->
 
 			<!--<treeLikelihood idref="treeLikelihood"/>-->
-			<!--<strictClockBranchRates idref="branchRates"/>-->
-
-			<!-- START Multivariate diffusion model                                      -->
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
-
-			<!-- END Multivariate diffusion model                                        -->
-
-			<!--<coalescentLikelihood idref="coalescent"/>-->
 		</log>
 
 		<!-- write tree log to file                                                  -->

@@ -133,12 +133,20 @@ class Tree(object):
         """
         return len(self.children) == 0
 
+    def is_root(self):
+        """
+
+        Returns:
+            bool: IS this node the root?
+        """
+        return self.parent is None
+
     def root(self):
         """Get the root of the current tree (iterate parent of the parent of...)
         Returns:
               Tree: Root of the current node.
         """
-        if self.parent is None:
+        if self.is_root():
             return self
         else:
             return self.parent.root()
@@ -308,7 +316,7 @@ class Tree(object):
     def get_hpd(self, p_hpd, location_key='location'):
         """Extract the HPD from the attributes dict."""
         attr_keys = list(self.attributes.keys())
-        hpd_key_template = '{location_key}{i_axis}_{p_hpd}%hpd_{i_polygon}'
+        hpd_key_template = '{location_key}{i_axis}_{p_hpd}%hpdy_{i_polygon}'
         hpd_key_template = hpd_key_template.format(location_key=location_key,
                                                    p_hpd=p_hpd,
                                                    i_axis='{i_axis}',
@@ -590,6 +598,7 @@ class Tree(object):
 
     def iter_descendants(self):
         """Iterate over all nodes in the tree.
+
         Yields:
             Tree: Each node of the tree in depth-first order.
         """
@@ -597,11 +606,95 @@ class Tree(object):
         for c in self.children:
             yield from c.iter_descendants()
 
+    def get_descendants(self):
+        """Get all nodes in the tree as a list.
+
+        Returns:
+            list[Tree]: List of all nodes in depth-first order.
+        """
+        return list(self.iter_descendants())
+
     def iter_leafs(self):
+        """Iterate over all leaf nodes in the tree.
+
+        Yields:
+            Tree: Each leaf node of the tree.
+        """
         if self.is_leaf():
             yield self
         for c in self.children:
             yield from c.iter_leafs()
+
+    def get_leafs(self):
+        """Get all leaf nodes in the tree as a list.
+
+        Returns:
+            list[Tree]: List of all leaf nodes.
+        """
+        return list(self.iter_leafs())
+
+    def iter_clades(self, max_size):
+        """Iterate over all maximal subtrees with n_leafs <= max_size.
+
+        Args:
+            max_size (int): The maximum number of leafs in a clade.
+
+        Yields:
+            Tree: A clade with n_leafs <= max_size
+        """
+        if self.n_leafs() <= max_size:
+            yield self
+        for child in self.children:
+            yield from child.iter_clades(max_size=max_size)
+
+    def get_clades(self, max_size, min_size=1):
+        """Get all maximal subtrees with n_leafs <= max_size as a list.
+
+        Args:
+            max_size (int):  The maximum number of leafs in a clade.
+
+        Returns:
+            list[Tree]: The list of all clades with n_leafs <= max_size.
+        """
+        clades = list(self.iter_clades(max_size=max_size))
+        if min_size > 1:
+            return [t for t in clades if t.n_leafs() >= min_size]
+
+    def iter_clades_at_height(self, height):
+        h = self.height()
+        l = self.length
+        if h + l < height:
+            return
+        elif h < height:
+            yield self
+        else:
+            for c in self.children:
+                yield from c.iter_clades_at_height(height)
+
+    def get_clades_at_height(self, height):
+        return list(self.iter_clades_at_height(height))
+
+    def get_phylo_dist_mat(self):
+        if self.is_leaf():
+            return np.zeros((1, 1))
+
+        left, right = self.children
+        n = self.n_leafs()
+        n_left = left.n_leafs()
+
+        X_left = left.get_phylo_dist_mat()
+        X_right = right.get_phylo_dist_mat()
+
+        X = np.ones((n, n)) * (2 * self.height())
+        X[:n_left, :n_left] = X_left
+        X[n_left:, n_left:] = X_right
+
+        return X
+
+    def get_loc_dist_mat(self):
+        locs = self.get_leaf_locations()
+        diffs = locs[:, np.newaxis, :] - locs[np.newaxis, :, :]
+        return np.linalg.norm(diffs, axis=-1)
 
     def __getitem__(self, key):
         return self.attributes[key]
@@ -639,16 +732,27 @@ def node_imbalance(node: Tree, ret_weight=True):
         return I, w
 
 
-def tree_imbalance(root, max_depth=None):
-    # TODO: According to (Purvis and Agapow 2002) we should use a weighted mean
-    # "Purvis and Agapow: Phylogeny imbalance and taxonomic level"
+def tree_imbalance(root, max_depth=None, weight_by_age=False):
+    """A tree imbalance score according to:
+    "Purvis and Agapow: Phylogeny imbalance and taxonomic level"
+    
+    Args:
+        root: 
+        max_depth: 
 
+    Returns:
+
+    """
     nodes = list(root.iter_descendants())
     if max_depth is not None:
         nodes = list(filter(lambda n: n.depth < max_depth, nodes))
     assert len(nodes) > 0  # At least the root itself should be in the list
 
     node_imbalances, weights = np.array([node_imbalance(n) for n in nodes]).T
+
+    if weight_by_age:
+        node_heights = np.array([n.height() for n in nodes])
+        weights *= node_heights / root.height()
 
     not_na = np.isfinite(node_imbalances)
     return np.nansum(weights*node_imbalances) / np.sum(weights[not_na])
@@ -839,10 +943,12 @@ def test_tree_imbalance():
     pass
 
 
-if __name__ == '__main__':
-    test_parse_length()
-    test_parse_attributes()
-    test_newick()
+# if __name__ == '__main__':
+    # test_parse_length()
+    # test_parse_attributes()
+    # test_newick()
+    # import matplotlib
+    # print(matplotlib.matplotlib_fname())
 
 
 def get_edge_heights(parent, child):

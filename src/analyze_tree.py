@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, \
-    unicode_literals
 from math import atan2
 
 import geopandas as gpd
@@ -10,7 +8,8 @@ from src.tree import angle_to_vector, get_edge_diff_rate
 from src.util import norm, normalize, extract_newick_from_nexus
 from src.plotting import *
 from src.config import PINK, TURQUOISE
-
+import matplotlib
+matplotlib.use('Qt5Agg')
 
 def get_edge_drift_agreement(parent, child):
     # Compute migration direction
@@ -123,24 +122,27 @@ if __name__ == '__main__':
         # XLIM = (2, 52)
         # YLIM = (-35, 15)
         XLIM = (-30, 60)
+        XLIM = (-34.8, 51.5)
         YLIM = (-35, 25)
+        YLIM = (-35.9, 13)
         DRIFT_ANGLE = -0.5
         DRIFT_DIRECTION = angle_to_vector(DRIFT_ANGLE)
         swap_xy = False
         HOMELAND = np.array([6.5, 10.5])
         LW = 0.1
-        HPD = 80
+        HPD = 90
 
         # TREE_PATH = 'data/bantu_withoutgroup_2/nowhere.tree'
-        TREE_PATH = 'data/bantu_rrw_outgroup_0_adapttree_0_adaptheight_0_hpd_{hpd}/nowhere.tree'.format(hpd=HPD)
+        # TREE_PATH = 'data/bantu_rrw_outgroup_1_adapttree_0_adaptheight_0_hpd_{hpd}/nowhere.tree'.format(hpd=HPD)
+        TREE_PATH = 'data/bantu_rrw_outgroup_False_adapttree_False_adaptheight_False_hpd_90_missingClades/nowhere.tree'.format(hpd=HPD)
         # TREE_PATH = 'data/bantu_brownian_without_outgroup/nowhere.tree'
 
         PLOT_DRIFT_LEGEND = 0
-        PLOT_TREE = 0
-        PLOT_HPD = 0
-        PLOT_ROOT = 0
+        PLOT_TREE = 1
+        PLOT_HPD = 1
+        PLOT_ROOT = 1
         PLOT_HOMELAND = 0
-        PLOT_TIPS = 0
+        PLOT_TIPS = 1
 
     elif FAMILY == 'ie':
         TREE_PATH = 'data/ie/IE_2MCCs.tree'
@@ -171,8 +173,7 @@ if __name__ == '__main__':
     world = gpd.read_file('data/naturalearth_50m_wgs84.geojson')
     # world = gpd.read_file('data/ne_50m_admin_0_countries.geojson')
 
-    ax = world.plot(color=grey(.9),
-                    edgecolor=grey(0.4), lw=.33, )
+    ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.33, )
     # cmap = plt.get_cmap('viridis')
     cmap = plt.get_cmap('jet')
     # 'viridis', 'inferno', 'plasma', 'gnuplot', 'PiYG', 'RdYlGn',
@@ -197,20 +198,38 @@ if __name__ == '__main__':
         #           lw=2., no_arrow=False)
 
         # plot_backbone_splits(tree, plot_edges=True, lw=LW)
-        plot_tree(tree, lw=3., color_fun=get_edge_diff_rate, cmap=cmap)
+        # plot_tree(tree, lw=3., color_fun=get_edge_diff_rate, cmap=cmap)
         # plot_clades(tree, max_clade_size=50)
+        plot_backbone_clades(tree, _i=3)
         # plot_subtree_hulls(tree)
 
+        # gradient = np.linspace(0, 1, 256)
+        # gradient = np.vstack((gradient, gradient))
+        # ax.imshow(gradient.T, aspect='auto', cmap=plt.get_cmap('tab20b'),
+        #           extent=[-2.5, -1, -34, 1])
+
+        # ax2 = plt.axes(position=[-10, 0, -34, 0])
+        # ax2 = plt.axes([-0.0, -0.0, 0.56, 0.7], frame_on=False)
+        l = 0.105
+        ax2 = plt.axes([l, 0.01, 0.555-l, 0.495], frame_on=False)
+        ax2.xaxis.set_visible(False)
+        ax2.yaxis.set_visible(False)
+        color_backbone_clades(tree, _i=3)
+        plot_tree_topology(tree, ax=ax2)
+
+        plt.sca(ax)
 
 
     if PLOT_HPD:
         okcool = plot_hpd(tree, HPD, color=PINK)
     if PLOT_ROOT:
         root = tree.location
-        plt.scatter(root[0], root[1], marker='*', c=PINK, s=500, zorder=3)
+        plt.scatter(root[0], root[1], marker='o', c='w', s=60, zorder=10, edgecolors='k')
+        # plt.scatter(root[0], root[1], marker='*', c='w', s=200, zorder=10, edgecolors='k')
         # plt.scatter(root[0], root[1], marker='*', c='w', s=5000, zorder=3, edgecolor='k')
     if PLOT_HOMELAND:
-        plt.scatter(HOMELAND[1], HOMELAND[0], marker='*', c=TURQUOISE, s=500, zorder=3)
+        plt.scatter(HOMELAND[1], HOMELAND[0], marker='o', c='w', s=50, zorder=9, edgecolors='k')
+        # plt.scatter(HOMELAND[1], HOMELAND[0], marker='*', c=TURQUOISE, s=500, zorder=10)
 
 
     if PLOT_DRIFT_LEGEND:
@@ -232,12 +251,14 @@ if __name__ == '__main__':
 
     if PLOT_TIPS:
         locs = np.array([leaf.location for leaf in tree.iter_leafs()])
-        plt.scatter(*locs.T, c='k', s=9.)
+        # plt.scatter(*locs.T, c='k', s=9.)
 
     # Plot Settings
     ax.set_xlim(XLIM)
     ax.set_ylim(YLIM)
     plt.axis('off')
+    # plt.axis('equal')
+    # ax.set_ylim(YLIM)
     plt.tight_layout(pad=0.)
     plt.show()
     exit()

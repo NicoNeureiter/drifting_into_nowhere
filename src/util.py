@@ -12,6 +12,9 @@ import pickle
 import shutil
 import datetime
 
+import pysal
+from pysal.lib.weights import Voronoi
+
 import numpy as np
 
 
@@ -316,3 +319,10 @@ def parse_arg(i, default, dtype=str):
         return dtype(sys.argv[i])
     else:
         return dtype(default)
+
+
+def delaunay_join_count(locations, labels):
+    graph = Voronoi(locations)
+    jc = pysal.explore.esda.Join_Counts(labels, graph)
+    n_b = np.count_nonzero(labels)
+    return jc.bb / (6*n_b - 12)

@@ -24,6 +24,20 @@ def write_ie_xml(xml_path, chain_length):
 
     # tree = tree.get_subtree([0, 0, 0, 0])
 
+    tree.remove_nodes_by_name(
+        [
+            'luvian',
+            'lycian',
+            'hittite',
+            'tocharian_b',
+            'tocharian_a',
+            'classical_armenian',
+            'armenian_list',
+            'armenian_mod',
+            'ancient_greek',
+        ]
+    )
+
     tree.write_beast_xml(xml_path, chain_length, root=None)
 
 
@@ -79,8 +93,9 @@ def swap_xy(tree):
             node.location = node.location[::-1]
 
 if __name__ == '__main__':
-    from src.plotting import plot_clades, plot_tree
+    from src.plotting import plot_clades, plot_tree, plot_root
     from workbench.map_projections import WorlMap
+    from src.beast_interface import run_beast, run_treeannotator
 
     CHAIN_LENGTH = 200000
     BURNIN = 5000
@@ -92,11 +107,24 @@ if __name__ == '__main__':
     GEO_TREE_PATH = 'data/ie/nowhere.tree'
 
 
-    with open(NEWICK_TREE_PATH, 'r') as tree_file:
-        nexus_str = tree_file.read()
-        newick_str = extract_newick_from_nexus(nexus_str)
+    # with open(NEWICK_TREE_PATH, 'r') as tree_file:
+    #     nexus_str = tree_file.read()
+    #     newick_str = extract_newick_from_nexus(nexus_str)
+    #
+    # tree = Tree.from_newick(newick_str, location_key=LOCATION_KEY)
+    # mkpath(IE_XML_PATH)
 
-    tree = Tree.from_newick(newick_str, location_key=LOCATION_KEY)
+    # plot_lingo_geo_distances()
+
+    write_ie_xml(IE_XML_PATH, CHAIN_LENGTH)
+
+    # Run the BEAST analysis + summary of results (treeannotator)
+    run_beast('data/ie/')
+    tree = run_treeannotator(HPD, BURNIN, 'data/ie/')
+
+    # Evaluate the results
+    # okcool = check_root_in_hpd(GEO_TREE_PATH, HPD, root=IE_ROOT)
+    # print('\n\nOk cool: %r' % okcool)
 
     swap_xy(tree)
 
@@ -110,23 +138,5 @@ if __name__ == '__main__':
 
     plot_tree(tree)
     plot_clades(tree, min_clade_size=3, max_clade_size=20)
+    plot_root(tree.location)
     plt.show()
-
-    # mkpath(IE_XML_PATH)
-
-    # plot_lingo_geo_distances()
-
-    # write_ie_xml(IE_XML_PATH, CHAIN_LENGTH)
-    #
-    # # Run the BEAST analysis + summary of results (treeannotator)
-    # os.system('bash {script} {hpd} {burnin} {cwd} {geojson}'.format(
-    #     script=SCRIPT_PATH,
-    #     hpd=HPD,
-    #     burnin=BURNIN,
-    #     cwd=os.getcwd()+'/data/ie/',
-    #     geojson=GEOJSON_PATH
-    # ))
-
-    # # Evaluate the results
-    # okcool = check_root_in_hpd(GEO_TREE_PATH, HPD, root=IE_ROOT)
-    # print('\n\nOk cool: %r' % okcool)

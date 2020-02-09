@@ -2,15 +2,16 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
-import os
+import random
 
 import numpy as np
 
-from src.tree import Tree, get_edge_heights
+from src.tree import Tree, angle_to_vector
 from src.util import mkpath
 
 
 NEWICK_TREE_PATH = 'data/bantu/bantu.nwk'
+POSTERIOR_PATH = 'data/bantu/posterior.trees'
 LOCATIONS_PATH = 'data/bantu/bantu_locations.csv'
 
 
@@ -36,10 +37,40 @@ OUTGROUP_NAMES = [
 def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
                     movement_model='rrw', adapt_tree=False, adapt_height=False):
     with open(NEWICK_TREE_PATH, 'r') as tree_file:
-        tree_str = tree_file.read()
-
+        tree_str = tree_file.read().lower().strip()
     tree = Tree.from_newick(tree_str.strip())
     tree.load_locations_from_csv(LOCATIONS_PATH, swap_xy=True)
+
+
+    if exclude_outgroup:
+        tree.remove_nodes_by_name(OUTGROUP_NAMES)
+
+    tree = tree.big_child().big_child().big_child()
+
+    tree.write_beast_xml(xml_path, chain_length, root=root,
+                         diffusion_on_a_sphere=True, movement_model=movement_model,
+                         adapt_tree=adapt_tree, adapt_height=adapt_height)
+
+
+def write_bantu_sample_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
+                    movement_model='rrw', adapt_tree=False, adapt_height=False):
+    with open(POSTERIOR_PATH, 'r') as tree_file:
+        nexus_str = tree_file.read().lower().strip()
+
+    name_map = read_nexus_name_mapping(nexus_str)
+    tree_lines = [line.split(' = ')[-1] for line in nexus_str.split('\n') if line.startswith('\t\ttree')]
+    tree_str = random.choice(tree_lines)
+    tree = Tree.from_newick(tree_str.strip())
+
+    for node in tree.iter_descendants():
+        if node.name in name_map:
+            node.name = name_map[node.name]
+
+    print(tree.to_newick())
+
+    tree.load_locations_from_csv(LOCATIONS_PATH, swap_xy=True)
+    leafs_without_locations = [node.name for node in tree.iter_leafs() if node.location is None]
+    tree.remove_nodes_by_name(leafs_without_locations)
 
     if exclude_outgroup:
         tree.remove_nodes_by_name(OUTGROUP_NAMES)
@@ -48,47 +79,68 @@ def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
                          diffusion_on_a_sphere=True, movement_model=movement_model,
                          adapt_tree=adapt_tree, adapt_height=adapt_height)
 
+DRIFT_ANGLE = -0.5
+DRIFT_DIRECTION = angle_to_vector(DRIFT_ANGLE)
+def get_space_time_position(node):
+    t = -node.height
+    x = np.dot(node.location, DRIFT_DIRECTION)
+    return x, t
+
 
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import geopandas as gpd
 
-    from src.beast_interface import run_beast, run_treeannotator, load_tree_from_nexus
-    from src.plotting import plot_hpd, plot_root, plot_tree, plot_height, plot_edge
+    from src.beast_interface import run_beast, run_treeannotator, load_tree_from_nexus, \
+        read_nexus_name_mapping, load_trees
+    from src.plotting import plot_hpd, plot_tree, plot_posterior_scatter
     from src.util import grey
-    from src.config import COLOR_ROOT_TRUE, PINK, TURQUOISE
+    from src.config import PINK, TURQUOISE
 
-    CHAIN_LENGTH = 5000000
-    BURNIN = 200000
-    HPD = 80
+    world = gpd.read_file('data/naturalearth_50m_wgs84.geojson')
+    ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.4, )
+
+    CHAIN_LENGTH = 500000
+    BURNIN = 10000
+    HPD = 90
 
     MODEL = 'rrw'
-    USE_OUTGROUP = 1
-    ADAPT_TREE = 0
-    ADAPT_HEIGHT = 0
-    FIX_ROOT = 0
+    USE_OUTGROUP = False
+    ADAPT_TREE = False
+    ADAPT_HEIGHT = False
+    FIX_ROOT = False
+
+    SUFFIX = '_missingClades'
 
     WORKING_DIR = 'data/bantu_{model}_outgroup_{og}_adapttree_{at}_' + \
-                  'adaptheight_{ah}_hpd_{hpd}{fixroot}/'
+                  'adaptheight_{ah}_hpd_{hpd}{fixroot}{suffix}/'
     WORKING_DIR = WORKING_DIR.format(
         model=MODEL, og=USE_OUTGROUP, at=ADAPT_TREE, ah=ADAPT_HEIGHT, hpd=HPD,
-        fixroot='_fixroot' if FIX_ROOT else ''
+        fixroot='_fixroot' if FIX_ROOT else '', suffix=SUFFIX
     )
     BANTU_XML_PATH = WORKING_DIR + 'nowhere.xml'
     GEOJSON_PATH = 'africa.geojson'
     GEO_TREE_PATH = WORKING_DIR + 'nowhere.tree'
+    GEO_TREES_PATH = WORKING_DIR + 'nowhere.trees'
     mkpath(WORKING_DIR)
 
-    # BANTU_ROOT = np.array([6.5, 10.5])
-    BANTU_ROOT = np.array([10.5, 6.5])
-    #
+    HOMELAND = np.array([10.5, 6.5])
+    ax.scatter(*HOMELAND, marker='*', c=TURQUOISE, s=200, zorder=3)
+
+    # with open(NEWICK_TREE_PATH, 'r') as tree_file:
+    #     tree_str = tree_file.read().lower().strip()
+    # tree = Tree.from_newick(tree_str.strip())
+    # tree.load_locations_from_csv(LOCATIONS_PATH, swap_xy=True)
+    # locations = tree.get_leaf_locations()
+    # from workbench.map_projections import WorldMap
+    # locations.
+
     write_bantu_xml(BANTU_XML_PATH, CHAIN_LENGTH,
-                    root=BANTU_ROOT if FIX_ROOT else None,
-                    exclude_outgroup=not USE_OUTGROUP,
-                    adapt_tree=ADAPT_TREE,
-                    adapt_height=ADAPT_HEIGHT,
-                    movement_model=MODEL)
-                    # movement_model='brownian')
+                   root=HOMELAND if FIX_ROOT else None,
+                   exclude_outgroup=not USE_OUTGROUP,
+                   adapt_tree=ADAPT_TREE,
+                   adapt_height=ADAPT_HEIGHT,
+                   movement_model=MODEL)
 
     # Run the BEAST analysis
     run_beast(WORKING_DIR)
@@ -96,26 +148,41 @@ if __name__ == '__main__':
 
     # Evaluate the results
     tree = load_tree_from_nexus(GEO_TREE_PATH)
-    okcool = tree.root_in_hpd(BANTU_ROOT, HPD)
-    print('\n\nOk cool: %r' % okcool)
+    # trees = load_trees(GEO_TREES_PATH)
+    okcool = tree.root_in_hpd(HOMELAND, HPD)
+    # print('\n\nOk cool: %r' % okcool)
 
-    XLIM = (-30, 60)
-    YLIM = (-35, 25)
+    # plot_posterio>r_scatter(trees, s=2., alpha=1.)
+    # plt.show()
+    # exit()
+
+    XLIM = (-20, 60)
+    YLIM = (-35, 38)
     swap_xy = False
-    HOMELAND = np.array([6.5, 10.5])
-    LW = 0.1
+    LW = 0.7
     cmap = plt.get_cmap('viridis')
 
-    world = gpd.read_file('data/naturalearth_50m_wgs84.geojson')
-    ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.4, )
-
-    from src.analyze_tree import flatten, invert
-
-    plot_tree(tree, lw=LW, color='k')
+    plot_tree(tree, color='k', lw=LW, alpha=0.3)
               # cmap=cmap, color_fun=flatten(invert(get_edge_heights), .7))
     root = tree.location
-    plt.scatter(root[0], root[1], marker='*', c=PINK, s=500, zorder=3)
-    plt.scatter(HOMELAND[1], HOMELAND[0], marker='*', c=TURQUOISE, s=500, zorder=3)
+    plt.scatter(root[0], root[1], marker='*', c=PINK, s=200, zorder=3)
+    # plot_hpd(tree, HPD)
+
+        # cmap = plt.get_cmap('tab20b')
+        # # plt.scatter(*tree.get_leaf_locations().T, c='grey', s=25, lw=0)
+        # subtree = tree
+        # clade = subtree.small_child()
+        # for i in range(13):
+        #     # plt.scatter(*clade.get_leaf_locations().T, c=[cmap(i)], s=15, lw=0)
+        #     plot_tree(clade, color=cmap(i), lw=LW)
+        #     subtree = subtree.big_child()
+        #     clade = subtree.small_child()
+        #     # plot_edge(subtree, subtree.big_child(), no_arrow=True)
+        # # plt.scatter(*subtree.get_leaf_locations().T, c=[cmap(i+2)], s=15, lw=0)
+        # # plt.scatter(*clade.get_leaf_locations().T, c=[cmap(i+1)], s=15, lw=0)
+        #
+        # plot_tree(subtree, color=cmap(i+2), lw=LW)
+        # plot_tree(clade, color=cmap(i+1), lw=LW)
 
     ax.set_xlim(XLIM)
     ax.set_ylim(YLIM)

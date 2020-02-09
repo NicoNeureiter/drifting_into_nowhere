@@ -15,7 +15,7 @@
 	</taxa>
 
 	<!-- The sequence alignment (each sequence refers to a taxon above).         -->
-	<!-- ntax={ntax} nchar={nchar}                                                        -->
+	<!-- ntax={ntax} nchar={nchar}                                               -->
 	<alignment id="alignment" dataType="binary">
 {features}
 	</alignment>
@@ -25,14 +25,6 @@
 	<patterns id="patterns" from="1" strip="false">
 		<alignment idref="alignment"/>
 	</patterns>
-
-	<!-- A prior assumption that the population size has remained constant       -->
-	<!-- throughout the time spanned by the genealogy.                           -->
-	<constantSize id="constant" units="substitutions">
-		<populationSize>
-			<parameter id="constant.popSize" value="1.0" lower="0.0"/>
-		</populationSize>
-	</constantSize>
 
 	<!-- The user-specified starting tree in a newick tree format.               -->
 	<newick id="startingTree" usingDates="true">
@@ -52,16 +44,6 @@
 			<parameter id="treeModel.allInternalNodeHeights"/>
 		</nodeHeights>
 	</treeModel>
-
-	<!-- Generate a coalescent likelihood                                        -->
-	<coalescentLikelihood id="coalescent">
-		<model>
-			<constantSize idref="constant"/>
-		</model>
-		<populationTree>
-			<treeModel idref="treeModel"/>
-		</populationTree>
-	</coalescentLikelihood>
 
 	<!-- The strict clock (Uniform rates across branches)                        -->
 	<strictClockBranchRates id="branchRates">
@@ -118,21 +100,37 @@
 		</data>
 	</multivariateWishartPrior>
 
-	<!-- END Multivariate diffusion model                                        -->
-
-
-	<!-- Likelihood for tree given sequence data                                 -->
-	<treeLikelihood id="treeLikelihood" useAmbiguities="false">
-		<patterns idref="patterns"/>
+	<discretizedBranchRates id="location.diffusionRates">
 		<treeModel idref="treeModel"/>
-		<siteModel idref="siteModel"/>
-		<strictClockBranchRates idref="branchRates"/>
-	</treeLikelihood>
+		<distribution>
+			<logNormalDistributionModel meanInRealSpace="true">
+				<mean>
+					<parameter value="1.0"/>
+				</mean>
+				<stdev>
+					<parameter id="location.stdev" value="1.0" lower="0.0"/>
+				</stdev>
+			</logNormalDistributionModel>
+		</distribution>
+		<rateCategories>
+			<parameter id="location.rrwCategories"/>
+		</rateCategories>
+	</discretizedBranchRates>
 
-	<!-- START Multivariate diffusion model                                      -->
-
-	<multivariateTraitLikelihood id="location.traitLikelihood" traitName="location" useTreeLength="true" scaleByTime="true" reportAsMultivariate="true" reciprocalRates="true" integrateInternalTraits="true">
+	<multivariateTraitLikelihood id="location.traitLikelihood" traitName="location" useTreeLength="true" scaleByTime="true" reportAsMultivariate="true" integrateInternalTraits="true">
 		<multivariateDiffusionModel idref="location.diffusionModel"/>
+		<driftModels>
+			<strictClockBranchRates id="driftModels.1">
+				<rate>
+					<parameter id="driftModels.1.rates" value="1.0"/>
+				</rate>
+			</strictClockBranchRates>
+			<strictClockBranchRates id="driftModels.2">
+				<rate>
+					<parameter id="driftModels.2.rates" value="1.0"/>
+				</rate>
+			</strictClockBranchRates>
+		</driftModels>
 		<treeModel idref="treeModel"/>
 		<traitParameter>
 			<parameter id="leaf.location"/>
@@ -148,6 +146,7 @@
 				<parameter value="{root_precision}"/>
 			</priorSampleSize>
 		</conjugateRootPrior>
+		<discretizedBranchRates idref="location.diffusionRates"/>
 	</multivariateTraitLikelihood>
 	<correlation id="location.correlation" dimension1="1" dimension2="2">
 		<matrixParameter idref="location.precision"/>
@@ -164,11 +163,29 @@
 
 	<!-- Define operators                                                        -->
 	<operators id="operators" optimizationSchedule="log">
-<!--
-		<deltaExchange delta="0.01" weight="1">
-			<parameter idref="frequencies"/>
-		</deltaExchange>
--->
+		<scaleOperator scaleFactor="0.9" weight="5">
+			<parameter idref="location.stdev"/>
+		</scaleOperator>
+		<swapOperator size="1" weight="20" autoOptimize="false">
+			<parameter idref="location.rrwCategories"/>
+		</swapOperator>
+		<uniformIntegerOperator weight="10">
+			<parameter idref="location.rrwCategories"/>
+		</uniformIntegerOperator>
+		<randomWalkOperator windowSize="0.02" weight="25">
+			<parameter idref="driftModels.1.rates"/>
+		</randomWalkOperator>
+		<randomWalkOperator windowSize="0.02" weight="25">
+			<parameter idref="driftModels.2.rates"/>
+		</randomWalkOperator>
+		<!--<scaleOperator scaleFactor="0.75" weight="10">-->
+			<!--<parameter idref="driftModels.1.rates"/>-->
+		<!--</scaleOperator>-->
+		<!--<scaleOperator scaleFactor="0.75" weight="10">-->
+			<!--<parameter idref="driftModels.2.rates"/>-->
+		<!--</scaleOperator>-->
+{tree_operators}
+{height_operators}
 
 		<!-- START Multivariate diffusion model                                      -->
 		<precisionGibbsOperator weight="10">
@@ -184,29 +201,19 @@
 	<mcmc id="mcmc" chainLength="{chain_length}" autoOptimize="false" operatorAnalysis="nowhere.ops">
 		<posterior id="posterior">
 			<prior id="prior">
-				<uniformPrior lower="0.0" upper="1.0">
-					<parameter idref="frequencies"/>
-				</uniformPrior>
-				<oneOnXPrior>
-					<parameter idref="constant.popSize"/>
-				</oneOnXPrior>
-				<coalescentLikelihood idref="coalescent"/>
-				<strictClockBranchRates idref="branchRates"/>
-
-				<!-- START Multivariate diffusion model                                      -->
+				<exponentialPrior mean="0.33333333" offset="0.0">
+					<parameter idref="location.stdev"/>
+				</exponentialPrior>
 				<multivariateWishartPrior idref="location.precisionPrior"/>
-
-				<!-- END Multivariate diffusion model                                        -->
-
+            	<normalPrior mean="0.0" stdev="{drift_prior_std}" offset="0.0">
+                	<parameter idref="driftModels.1.rates"/>
+            	</normalPrior>
+            	<normalPrior mean="0.0" stdev="{drift_prior_std}" offset="0.0">
+                	<parameter idref="driftModels.2.rates"/>
+            	</normalPrior>
 			</prior>
 			<likelihood id="likelihood">
-				<treeLikelihood idref="treeLikelihood"/>
-
-				<!-- START Multivariate diffusion model                                      -->
 				<multivariateTraitLikelihood idref="location.traitLikelihood"/>
-
-				<!-- END Multivariate diffusion model                                        -->
-
 			</likelihood>
 		</posterior>
 		<operators idref="operators"/>
@@ -228,12 +235,11 @@
 		</log>
 
 		<!-- write log to file                                                       -->
-		<log id="fileLog" logEvery="500" fileName="nowhere.log" overwrite="true">
+		<log id="fileLog" logEvery="1000" fileName="nowhere.log" overwrite="true">
 			<posterior idref="posterior"/>
 			<prior idref="prior"/>
 			<likelihood idref="likelihood"/>
 			<parameter idref="treeModel.rootHeight"/>
-			<parameter idref="constant.popSize"/>
 			<parameter idref="clock.rate"/>
 			<rateStatistic idref="meanRate"/>
 
@@ -241,23 +247,17 @@
 			<matrixParameter idref="location.precision"/>
 			<correlation idref="location.correlation"/>
 			<matrixInverse idref="location.varCovar"/>
+			<parameter idref="location.stdev"/>
+			<!--<parameter idref="location.rrwCategories"/>-->
 			<continuousDiffusionStatistic idref="location.diffusionRate"/>
-
-			<!-- END Multivariate diffusion model                                        -->
-
-			<treeLikelihood idref="treeLikelihood"/>
-			<strictClockBranchRates idref="branchRates"/>
-
-			<!-- START Multivariate diffusion model                                      -->
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
-
+			<parameter idref="driftModels.1.rates"/>
+			<parameter idref="driftModels.2.rates"/>
 			<!-- END Multivariate diffusion model                                        -->
-
-			<coalescentLikelihood idref="coalescent"/>
 		</log>
 
 		<!-- write tree log to file                                                  -->
-		<logTree id="treeFileLog" logEvery="100" nexusFormat="true" fileName="nowhere.trees" sortTranslationTable="true">
+		<logTree id="treeFileLog" logEvery="1000" nexusFormat="true" fileName="nowhere.trees" sortTranslationTable="true">
 			<treeModel idref="treeModel"/>
 			<trait name="rate" tag="rate">
 				<strictClockBranchRates idref="branchRates"/>
@@ -268,14 +268,11 @@
 			<trait name="location" tag="location">
 				<multivariateTraitLikelihood idref="location.traitLikelihood"/>
 			</trait>
-
-			<!-- END Ancestral state reconstruction                                      -->
-
-
-			<!-- START Multivariate diffusion model                                      -->
 			<multivariateDiffusionModel idref="location.diffusionModel"/>
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
-
+			<trait name="rate" tag="location.rate">
+				<discretizedBranchRates idref="location.diffusionRates"/>
+			</trait>
 			<!-- END Multivariate diffusion model                                        -->
 
 		</logTree>

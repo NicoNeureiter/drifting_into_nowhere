@@ -3,6 +3,7 @@
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
 import os
+import sys
 import csv
 import logging
 import random
@@ -11,6 +12,10 @@ import pickle
 import shutil
 import datetime
 
+import pysal
+from pysal.lib.weights import Voronoi
+
+from pathlib import Path
 import numpy as np
 
 
@@ -148,8 +153,22 @@ def total_diffusion_2_step_var(total_diffusion, n_steps):
     return total_diffusion ** 2 / n_steps
 
 
+def touch(fname):
+    if os.path.exists(fname):
+        os.utime(fname, None)
+    else:
+        open(fname, '+a').close()
+
+
 def mkpath(path):
+    path = Path(path).absolute()
+    print(path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
+    if not os.path.isdir(path):
+        if '.' in path.parts[-1]:
+            touch(path)
+        else:
+            os.mkdir(path)
 
 
 class StringTemplate(object):
@@ -180,6 +199,9 @@ class StringTemplate(object):
         self.format_dict.update(fill_values)
 
     def fill(self):
+        # print()
+        # print('\n'.join(self.format_dict.keys()))
+        # print()
         return self.template_string.format(**self.format_dict)
 
     def __str__(self):
@@ -192,8 +214,8 @@ def str_concat_array(a):
 
 def extract_tree_line(nexus):
     for line in nexus.split('\n'):
-        line = str.lower(line.strip())
-        if line.startswith('tree '):
+        line = line.strip()
+        if line.lower().startswith('tree '):
             return line
 
 
@@ -210,8 +232,8 @@ def transform_tree_coordinates(tree, trafo):
 def time_drift_trafo(node):
     x, y = node.location
     # drft = 0.877 * x - 0.479 * y
-    # return x, -node.height
-    return node.height, y  # + 0.2*x
+    # return x, -node.depth
+    return node.depth, y  # + 0.2*x
 
 
 def unit_vector(rad):
@@ -239,18 +261,24 @@ class SubprocessException(Exception):
     pass
 
 
-def experiment_preperations(work_dir):
+def experiment_preperations(work_dir, seed=None):
     # Ensure working directory exists
-    now = datetime.datetime.now()
+    now = str(datetime.datetime.now()).replace(' ', '--').replace(':', '-').rpartition('.')[0]
     exp_dir = os.path.join(work_dir, 'experiment_logs_%s/' % now)
+
     mkpath(exp_dir)
+    exp_dir = Path(exp_dir)
 
     # Safe state of current file and config to the experiment folder
+    base_file = sys.argv[0]
+    base_file = Path(base_file)
+    shutil.copy(base_file, exp_dir)
     shutil.copy(__file__, exp_dir)
     shutil.copy('src/config.py', exp_dir)
 
     # Generate random seed
-    seed = random.randint(0, 1e9)
+    if seed is None:
+        seed = random.randint(0, 1e9)
 
     # Set it in built-in random and numpy.random
     random.seed(seed)
@@ -258,7 +286,52 @@ def experiment_preperations(work_dir):
 
     # Print and write the seed to a file.
     print('Random seed:', seed)
-    with open(os.path.join(exp_dir, 'seed'), 'w') as seed_file:
+    with exp_dir.joinpath('seed').open('+w') as seed_file:
         seed_file.write(str(seed))
 
     return exp_dir
+
+
+def birth_death_expectation(birth_rate, death_rate, n_steps, vrange=None):
+
+    N_SAMPLES = 1000
+    samples = np.ones(N_SAMPLES, dtype=int)
+    for _ in range(n_steps):
+        new_samples = np.copy(samples)
+        new_samples += np.random.binomial(samples, birth_rate)
+        new_samples -= np.random.binomial(samples, death_rate)
+        samples = new_samples
+
+    print('P total extinction: %.2f' % np.mean(samples == 0))
+    print('P too small: %.2f' % np.mean(samples < vrange[0]))
+    print('P too big: %.2f' % np.mean(samples > vrange[1]))
+
+    if vrange is not None:
+        samples = np.array([s for s in samples if vrange[0] <= s <= vrange[1]])
+
+    print('P out of range: %.2f' % (1 - len(samples) / N_SAMPLES))
+    print('Expected leafs: %.2f' % np.mean(samples))
+    print('Standard dev. leafs: %.2f' % np.std(samples))
+    return np.mean(samples)
+
+
+def parse_arg(i, default, dtype=str):
+    """Parse the ´i´th argument if provided in sys.argv, else return ´default´.
+    Args:
+        i (int): Index of the argument in sys.argv
+        default (dtype): The default values.
+        dtype (type): The type of the argument.
+    Returns:
+        dtype: The parsed CLI argument.
+    """
+    if len(sys.argv) > i:
+        return dtype(sys.argv[i])
+    else:
+        return dtype(default)
+
+
+def delaunay_join_count(locations, labels):
+    graph = Voronoi(locations)
+    jc = pysal.explore.esda.Join_Counts(labels, graph)
+    n_b = np.count_nonzero(labels)
+    return jc.bb / (6*n_b - 12)

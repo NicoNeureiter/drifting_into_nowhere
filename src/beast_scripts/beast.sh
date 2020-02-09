@@ -2,4 +2,4 @@
 
 CWD=$1
 cd $CWD
-beast -overwrite nowhere.xml
+beast1 -overwrite nowhere.xml

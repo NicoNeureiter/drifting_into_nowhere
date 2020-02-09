@@ -1,73 +1,210 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, \
-    unicode_literals
+import logging
 
 import numpy as np
-from matplotlib import pyplot as plt
-from shapely.geometry import Point, Polygon
+import matplotlib.pyplot as plt
+
+from scipy.stats import pearsonr
+
+from src.beast_interface import run_treeannotator, load_trees
+from src.tree import tree_imbalance, node_imbalance
+from src.util import dist, delaunay_join_count
+
+LOGGER = logging.getLogger('experiment')
 
 
-def coverage(root, tree, p_hpd):
-    # Ensure that root is a Point object
-    if not isinstance(root, Point):
-        assert len(root) == 2
-        root = Point(root[0], root[1])
-
-    # Check whether any of the HPD polygons () cover
-    for polygon in tree.get_hpd(p_hpd):
-        if polygon.contains(root):
-            return True
-
-    return False
+def eval_hpd_hit(root, p_hpd, burnin, working_dir):
+    tree_mcc = run_treeannotator(p_hpd, burnin, working_dir=working_dir)
+    return tree_mcc.root_in_hpd(root, p_hpd)
 
 
-# def check_root_in_hpd(tree_file_path, hpd, root, ax=None, alpha=0.15, color='teal', **plt_kwargs):
-#     hpd_regex = 'location[12]_{hpd}%HPD_[0-9]+={{[0-9,.\\-]+}}'.format(hpd=hpd)
-#     if not isinstance(root, Point):
-#         assert len(root) == 2
-#         root = Point(root[0], root[1])
-#
-#     with open(tree_file_path, 'r') as tree_file:
-#         tree_str = tree_file.read()
-#
-#     # Find the part of the file describing the root info
-#     root_str = tree_str.rpartition(')[&')[-1].rpartition('];')[0]
-#     assert '(' not in root_str
-#     assert ')' not in root_str
-#
-#     hpd_strs = re.findall(hpd_regex, root_str)
-#
-#     # No duplicates:
-#     assert len(hpd_strs) == len(set(hpd_strs))
-#
-#     # Extract values for HPD polygons
-#     hpds_x = []
-#     hpds_y = []
-#     for hpd_str in sorted(hpd_strs):
-#         hpd_values = hpd_str.partition('{')[-1].partition('}')[0].split(',')
-#         hpd = np.array([float(x) for x in hpd_values])
-#
-#         if hpd_str.startswith('location1'):
-#             hpds_x.append(hpd)
-#         else:
-#             hpds_y.append(hpd)
-#
-#     # Create the polygons (and draw)
-#     polygons = []
-#     for xs, ys in zip(hpds_x, hpds_y):
-#         polygons.append(Polygon(zip(xs, ys)))
-#         a = Polygon(zip(xs, ys)).area
-#
-#         if ax:
-#             ax.fill(xs, ys, alpha=alpha, color=color, **plt_kwargs)
-#
-#     # HPD covers root if any of the polygons covers it
-#     success = any(poly.contains(root) for poly in polygons)
-#
-#     # Log some info in case of failure
-#     if not success:
-#         logging.info('Root not in HDP.')
-#         logging.info(tree_str.rpartition(')[&')[-1])
-#
-#     return success
+def eval_mean_offset(root, trees):
+    root_samples = [t.location for t in trees]
+    mean_estimate = np.mean(root_samples, axis=0)
+    return mean_estimate - root
+
+
+def eval_bias(root, trees):
+    root_samples = [t.location for t in trees]
+    mean_estimate = np.mean(root_samples, axis=0)
+    return dist(root, mean_estimate)
+
+
+def eval_stdev(root, trees):
+    root_samples = [t.location for t in trees]
+    std = np.std(root_samples, axis=0)
+    return np.linalg.norm(std)
+
+
+def eval_rmse(root, trees):
+    errors = [dist(root, t.location)**2. for t in trees]
+    return np.mean(errors)**0.5
+
+
+def tree_statistics(tree):
+    stats = {}
+
+    # The number of fossils (non contemporary leafs) in the tree.
+    stats['n_fossils'] = tree.n_fossils()
+    stats['observed_drift'] = observed_drift(tree)
+    stats['observed_drift_x'], stats['observed_drift_y'] = mean_offset(tree)
+
+    # Global inbalance stats
+    stats['imbalance'] = tree_imbalance(tree)
+    stats['deep_imbalance'] = tree_imbalance(tree, max_depth=0.5 * tree.height())
+
+    # Raw size stats
+    stats['size'] = tree.n_leafs()
+
+    DROP_FOSSILS = True
+    if DROP_FOSSILS:
+        tree.drop_fossils()
+
+    CLADE_HEIGHT = tree.height() / 2.
+    clades = tree.get_clades_at_height(CLADE_HEIGHT)
+    clades = [t for t in clades if t.n_leafs() > 2]
+
+    log_div_rate = [log_diversification_rate(t, height=CLADE_HEIGHT) for t in clades]
+    migr_rate = [diffusion_rate(t) for t in clades]
+
+    if len(migr_rate) >= 2 and len(log_div_rate) >= 2:
+        stats['space_div_dependence'] = pearsonr(migr_rate, log_div_rate)[0]
+    else:
+        stats['space_div_dependence'] = np.nan
+
+    stats['clade_overlap'] = mean_clade_overlap(clades)
+
+    return stats
+
+
+def running_mean(x, N):
+    cumsum = np.cumsum(np.insert(x, 0, 0))
+    return (cumsum[N:] - cumsum[:-N]) / float(N)
+
+
+def evaluate(working_dir, burnin, hpd_values, true_root):
+    results = {}
+    for hpd in hpd_values:
+        # Summarize tree using tree-annotator
+        tree = run_treeannotator(hpd, burnin, working_dir=working_dir)
+
+        # Compute HPD coverage
+        hit = tree.root_in_hpd(true_root, hpd)
+        results['hpd_%i' % hpd] = hit
+        LOGGER.info('\t\tRoot in %i%% HPD: %s' % (hpd, hit))
+
+    # Load posterior trees for other metrics
+    trees = load_trees(working_dir + 'nowhere.trees')
+
+    # Compute and log RMSE
+    rmse = eval_rmse(true_root, trees)
+    results['rmse'] = rmse
+    LOGGER.info('\t\tRMSE: %.2f' % rmse)
+
+    # Compute and log mean offset
+    offset = eval_mean_offset(true_root, trees)
+    results['bias_x'] = offset[0]
+    results['bias_y'] = offset[1]
+    LOGGER.info('\t\tMean offset: (%.2f, %.2f)' % tuple(offset))
+
+    # Compute and log bias
+    bias = eval_bias(true_root, trees)
+    results['bias_norm'] = bias
+    LOGGER.info('\t\tBias: %.2f' % bias)
+
+    # Compute and log standard deviation
+    stdev = eval_stdev(true_root, trees)
+    results['stdev'] = stdev
+    LOGGER.info('\t\tStdev: %.2f' % stdev)
+
+    return results
+
+
+def diffusion_rate(tree):
+    locs = tree.get_leaf_locations()
+    std = np.std(locs, axis=0)
+    # print(std)
+    return np.linalg.norm(std)
+
+
+def migration_rate(tree):
+    if tree.is_leaf():
+        return np.nan
+    locs = tree.get_leaf_locations()
+    diffs = locs - tree.location
+    dists = np.linalg.norm(diffs, axis=-1)
+    rates = dists / tree.height()
+    return np.mean(rates)
+
+
+def log_diversification_rate(tree):
+    if tree.is_leaf():
+        return np.nan
+    # return (tree.n_leafs() ** (1 / tree.height()) - 1) * 100.
+    return np.log(tree.n_leafs()) / tree.height()
+
+
+def _diffusion_rate(tree, height=None):
+    if height is None:
+        height = tree.height()
+
+    locs = tree.get_leaf_locations()
+    std = np.std(locs, axis=0, ddof=1)
+    return np.linalg.norm(std) / height**0.5
+
+
+def diffusion_rate(tree):
+    geo_dists = tree.get_loc_dist_mat()
+    phylo_dists = tree.get_phylo_dist_mat()
+    geo_rates = geo_dists / (phylo_dists ** 0.5)
+    return np.nanmean(geo_rates)
+
+
+def log_diversification_rate(tree, height=None):
+    if tree.is_leaf():
+        return np.nan
+
+    if height is None:
+        height = tree.height()
+
+    return np.log(tree.n_leafs()) / height
+
+
+def log_div_rate(tree):
+    intern_lens = [t.length for t in tree.iter_descendants() if not t.is_leaf()]
+    return 1 / np.mean(intern_lens)
+
+
+def mean_clade_overlap(clades):
+    other_clades = set(clades)
+
+    scores = []
+    for clade in clades:
+        other_clades.remove(clade)
+
+        locations_clade = [node.location for node in clade.iter_leafs()]
+        locations_other = [node.location for other in other_clades for node in other.iter_leafs()]
+        locations = locations_clade + locations_other
+        locations = np.array(locations)
+
+        labels = [1] * len(locations_clade) + [0] * len(locations_other)
+        join_count = delaunay_join_count(locations, labels)
+        scores.append(join_count)
+
+    return np.mean(scores)
+
+
+def mean_offset(tree):
+    if tree.is_leaf():
+        return np.nan
+    mean_loc = np.mean(tree.get_leaf_locations(), axis=0)
+    return mean_loc - tree.location
+
+
+def observed_drift(tree):
+    return np.linalg.norm(mean_offset(tree))
+
+
+def drift_rate(tree):
+    return observed_drift(tree) / tree.height()

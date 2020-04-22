@@ -235,9 +235,6 @@ if __name__ == '__main__':
 
 
     rnd_seed = np.random.randint(0,4000000000)
-    # print(rnd_seed)
-    # rnd_seed = 3073416186
-    # rnd_seed = 3547844550
     random.seed(rnd_seed)
     np.random.seed(rnd_seed)
     print('Random Seed:', rnd_seed)

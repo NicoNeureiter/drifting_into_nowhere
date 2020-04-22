@@ -152,10 +152,6 @@ if __name__ == '__main__':
     okcool = tree.root_in_hpd(HOMELAND, HPD)
     # print('\n\nOk cool: %r' % okcool)
 
-    # plot_posterio>r_scatter(trees, s=2., alpha=1.)
-    # plt.show()
-    # exit()
-
     XLIM = (-20, 60)
     YLIM = (-35, 38)
     swap_xy = False
@@ -167,22 +163,6 @@ if __name__ == '__main__':
     root = tree.location
     plt.scatter(root[0], root[1], marker='*', c=PINK, s=200, zorder=3)
     # plot_hpd(tree, HPD)
-
-        # cmap = plt.get_cmap('tab20b')
-        # # plt.scatter(*tree.get_leaf_locations().T, c='grey', s=25, lw=0)
-        # subtree = tree
-        # clade = subtree.small_child()
-        # for i in range(13):
-        #     # plt.scatter(*clade.get_leaf_locations().T, c=[cmap(i)], s=15, lw=0)
-        #     plot_tree(clade, color=cmap(i), lw=LW)
-        #     subtree = subtree.big_child()
-        #     clade = subtree.small_child()
-        #     # plot_edge(subtree, subtree.big_child(), no_arrow=True)
-        # # plt.scatter(*subtree.get_leaf_locations().T, c=[cmap(i+2)], s=15, lw=0)
-        # # plt.scatter(*clade.get_leaf_locations().T, c=[cmap(i+1)], s=15, lw=0)
-        #
-        # plot_tree(subtree, color=cmap(i+2), lw=LW)
-        # plot_tree(clade, color=cmap(i+1), lw=LW)
 
     ax.set_xlim(XLIM)
     ax.set_ylim(YLIM)

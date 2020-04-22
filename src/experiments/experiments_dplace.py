@@ -7,30 +7,85 @@ import os
 import sys
 import json
 
-import scipy
 import numpy as np
+import pandas as pd
+import geopandas as gpd
 
 from src.experiments.experiment import Experiment
 from src.evaluation import evaluate, tree_statistics
-from src.simulation.simulation import run_simulation
-from src.simulation.grid_simulation import init_cone_simulation
-from src.beast_interface import run_beast, load_trees
-from src.tree import tree_imbalance
-from src.util import mkpath, parse_arg
+from src.beast_interface import load_trees
+from src.tree import tree_imbalance, rename_nodes, naive_location_reconstruction, assign_lcations
+from src.util import mkpath, parse_arg, grey
+from src.plotting import plot_tree
 
-LFAM = 'indo-european'
-BANTU_POSTERIOR_PATH = 'data/bantu/posterior.trees'
-LOCATIONS_PATH = 'data/bantu/bantu_locations.csv'
-
-bantu_trees = load_trees(BANTU_POSTERIOR_PATH, read_name_mapping=True)
-for tree in bantu_trees:
-    tree.load_locations_from_csv(LOCATIONS_PATH, swap_xy=True)
-    leafs_without_locations = [node.name for node in tree.iter_leafs() if node.location is None]
-    tree.remove_nodes_by_name(leafs_without_locations)
+# LFAM = 'pama-nyungan'
+# LFAM = 'sino-tibetan'
+LFAM = 'uto-aztecan'
+POSTERIOR_PATH = f'data/dplace/{LFAM}.trees'
+CODES_PATH = f'data/dplace/{LFAM}.csv'
+LOCATIONS_PATH = 'data/codes_to_locs.csv'
 
 
-for tree in bantu_trees[:3]:
-    print(tree.to_newick())
+codes = pd.read_csv(CODES_PATH, sep=',', index_col='taxon')
+codes.index = codes.index.map(str.lower)
+codes = codes[['glottocode']].dropna()
+
+locations = pd.read_csv(LOCATIONS_PATH, sep='\t')
+locations = locations[['Glottolog', 'Latitude', 'Longitude']]
+locations = locations.dropna()
+locations = locations.drop_duplicates('Glottolog')
+locations = locations.set_index('Glottolog')
+
+locations = codes.join(locations, on='glottocode', how='inner')
+locations = locations[['Latitude', 'Longitude']]
+
+ntrees = None
+trees = load_trees(POSTERIOR_PATH, read_name_mapping=True, max_trees=ntrees)
+
+# world = gpd.read_file('data/naturalearth_50m_wgs84.geojson')
+# ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.33, )
+
+remove_list = []
+first = True
+for tree in trees[:ntrees]:
+    if first:
+        for node in tree.iter_leafs():
+            if node.name not in locations.index:
+                remove_list.append(node.name)
+        print('Remove %i of %i leaves' % (len(remove_list), tree.n_leafs()), end='  \t:  \t')
+        print(remove_list)
+
+        first = False
+
+
+    tree.remove_nodes_by_name(remove_list)
+
+    # tree.binarize()
+
+    # rename_nodes(tree, glottocodes)
+
+    locs = []
+    for node in tree.iter_leafs():
+        y, x = locations.loc[node.name]
+        loc = np.array([x, y])
+        while tuple(loc) in locs:
+            # print('.', end='')
+            # print(x, y)
+            loc = np.array([x, y]) + np.random.normal(0., 0.001, size=(2,))
+        locs.append(tuple(loc))
+        node._location = loc
+
+        # leafs_without_locations = [node.name for node in tree.iter_leafs() if node.location is None]
+    # tree.remove_nodes_by_name(leafs_without_locations)
+
+#     naive_location_reconstruction(tree)
+#     # plot_tree(tree, alpha=0.4, lw=.2)
+#     plot_tree(tree, lw=.3)
+#
+# import matplotlib.pyplot as plt
+# plt.xlim(-20, 100)
+# plt.ylim(0, 75)
+# plt.show()
 # exit()
 
 
@@ -43,7 +98,7 @@ def run_experiment(i_tree, **kwargs):
     Returns:
         dict: Statistics of the experiments (different error values).
     """
-    tree = bantu_trees[i_tree]
+    tree = trees[i_tree]
     results = tree_statistics(tree)
     return results
 
@@ -51,7 +106,7 @@ def run_experiment(i_tree, **kwargs):
 if __name__ == '__main__':
 
     # Set working directory
-    WORKING_DIR = 'experiments/bantu/tree_statistics/'
+    WORKING_DIR = f'experiments/{LFAM}/tree_statistics/'
     mkpath(WORKING_DIR)
 
     # Set cwd for logger
@@ -80,7 +135,7 @@ if __name__ == '__main__':
 
     # Run the experiment
     # variable_parameters = {'cone_angle': np.linspace(0.2,2,12) * np.pi}
-    variable_parameters = {'i_tree': list(range(len(bantu_trees)))}
+    variable_parameters = {'i_tree': list(range(len(trees)))}
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, 1, WORKING_DIR)
     experiment.run(resume=0)

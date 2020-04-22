@@ -127,7 +127,7 @@ def run_treeannotator(hpd, burnin, working_dir,
     working_dir = os.path.abspath(working_dir)
     tree_path = os.path.join(working_dir, 'nowhere.tree')
 
-    bash_command = 'bash {script} {hpd} {burnin} {cwd} {trees_file} {mcc_file}'.format(
+    bash_command = 'sh {script} {hpd} {burnin} {cwd} {trees_file} {mcc_file}'.format(
         script=script_path, hpd=hpd, burnin=burnin, cwd=working_dir,
         trees_file=trees_fname, mcc_file=mcc_fname
     )
@@ -178,7 +178,7 @@ def read_nexus_name_mapping(nexus_str):
     #
     # return name_map
 
-def load_trees(tree_path, read_name_mapping=False):
+def load_trees(tree_path, read_name_mapping=False, max_trees=None):
     with open(tree_path, 'r') as tree_file:
         nexus_str = tree_file.read().lower().strip()
 
@@ -201,5 +201,7 @@ def load_trees(tree_path, read_name_mapping=False):
             tree = Tree.from_newick(newick_str, translate=name_map)
             trees.append(tree)
 
-    # print([(t.location, t.attributes) for t in trees])
+            if max_trees is not None and len(trees) >= max_trees:
+                return trees
+
     return trees

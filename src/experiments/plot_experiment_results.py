@@ -16,52 +16,53 @@ LABELS = {
     'bias': 'Bias',
 }
 
-def plot_hpd_coverages(hpd_values, simulation, movement_model, fossil_age=None,
-                       x_name='total_drift', ax=None):
-    if ax is None:
-        ax = plt.gca()
+# def plot_hpd_coverages(hpd_values, simulation, movement_model, fossil_age=None,
+#                        x_name='total_drift', ax=None):
+#     if ax is None:
+#         ax = plt.gca()
+#
+#     working_dir = os.path.join('experiments', simulation, movement_model)
+#     if fossil_age is not None:
+#         working_dir += '_fossils=%s' % fossil_age
+#     results_csv_path = os.path.join(working_dir, 'results.csv')
+#     results = pd.read_csv(results_csv_path)
+#
+#     # results = results.groupby('cone_angle').mean()
+#     results = results.groupby(x_name).mean()
+#     x = results.index
+#     for hpd in hpd_values:
+#         metric = 'hpd_%i'% hpd
+#         y = results[metric]
+#         ax.plot(x, y, label=metric)
+#
+#     ax.set_xlabel(LABELS[x_name], labelpad=LABELPAD_X)
+#
+#
+# def plot_error_stats(simulation, movement_model, fossil_age=None,
+#                      x_name='total_drift', ax=None):
+#     if ax is None:
+#         ax = plt.gca()
+#
+#     working_dir = os.path.join('experiments', simulation, movement_model)
+#     if fossil_age is not None:
+#         working_dir += '_fossils=%s' % fossil_age
+#     results_csv_path = os.path.join(working_dir, 'results.csv')
+#     results = pd.read_csv(results_csv_path)
+#
+#     results = results.groupby(x_name).mean()
+#     x = results.index
+#     results['bias'] = np.hypot(results['bias_x'],
+#                                results['bias_y'])
+#     results['observed_drift'] = np.hypot(results['observed_drift_x'],
+#                                           results['observed_drift_y'])
+#     for metric in ['bias', 'observed_drift']:  # 'rmse'
+#         ax.plot(x, results[metric], label=metric)
+#
+#     ax.set_xlabel(LABELS[x_name], labelpad=LABELPAD_X)
 
-    working_dir = os.path.join('experiments', simulation, movement_model)
-    if fossil_age is not None:
-        working_dir += '_fossils=%s' % fossil_age
-    results_csv_path = os.path.join(working_dir, 'results.csv')
-    results = pd.read_csv(results_csv_path)
-
-    # results = results.groupby('cone_angle').mean()
-    results = results.groupby(x_name).mean()
-    x = results.index
-    for hpd in hpd_values:
-        metric = 'hpd_%i'% hpd
-        y = results[metric]
-        ax.plot(x, y, label=metric)
-
-    ax.set_xlabel(LABELS[x_name], labelpad=LABELPAD_X)
-
-
-def plot_error_stats(simulation, movement_model, fossil_age=None,
-                     x_name='total_drift', ax=None):
-    if ax is None:
-        ax = plt.gca()
-
-    working_dir = os.path.join('experiments', simulation, movement_model)
-    if fossil_age is not None:
-        working_dir += '_fossils=%s' % fossil_age
-    results_csv_path = os.path.join(working_dir, 'results.csv')
-    results = pd.read_csv(results_csv_path)
-
-    results = results.groupby(x_name).mean()
-    x = results.index
-    results['bias'] = np.hypot(results['bias_x'],
-                               results['bias_y'])
-    results['observed_drift'] = np.hypot(results['observed_drift_x'],
-                                          results['observed_drift_y'])
-    for metric in ['bias', 'observed_drift']:  # 'rmse'
-        ax.plot(x, results[metric], label=metric)
-
-    ax.set_xlabel(LABELS[x_name], labelpad=LABELPAD_X)
 
 def plot_error_stats_by_empirical_drift(simulation, movement_model, fossil_age=None,
-                     x_name='cone_angle', ax=None):
+                                        x_name='cone_angle', ax=None):
     if ax is None:
         ax = plt.gca()
 
@@ -77,16 +78,53 @@ def plot_error_stats_by_empirical_drift(simulation, movement_model, fossil_age=N
         ax.scatter(x, results[metric].values, s=1., alpha=0.1)
         # plt.show()
 
+    # print(len(np.unique(results[x_name].to_numpy()) / np.pi))
+    # print(len(np.linspace(0.2, 2., 10)))
+
     results = results.groupby(x_name).mean()
     results['bias'] = np.hypot(results['bias_x'],
-                                     results['bias_y'])
+                               results['bias_y'])
     results['observed_drift'] = np.hypot(results['observed_drift_x'],
-                                          results['observed_drift_y'])
+                                         results['observed_drift_y'])
     x = results['observed_drift']
     for metric in ['rmse', 'bias']:
         ax.plot(x, results[metric], label=LABELS[metric])
 
     ax.set_xlabel(LABELS['observed_drift'], labelpad=LABELPAD_X)
+
+def plot_error_stats_by_empirical_drift_varying_overlap(simulation, movement_model, fossil_age=None,
+                                                        x_name='cone_angle', ax=None):
+    if ax is None:
+        ax = plt.gca()
+
+    for overlap in [0.0, 0.5, 1.0]:
+        working_dir = os.path.join('experiments',
+                                   simulation + '_overlap_%s' % overlap,
+                                   movement_model)
+        results_csv_path = os.path.join(working_dir, 'results.csv')
+        results = pd.read_csv(results_csv_path)
+        results = results
+
+        x = results['observed_drift_norm']
+        # for metric in ['rmse', 'bias_norm']:
+        for metric in ['bias_norm']:
+            ax.scatter(x, results[metric].values, s=1., alpha=0.1)
+            # plt.show()
+
+        # print(len(np.unique(results[x_name].to_numpy()) / np.pi))
+        # print(len(np.linspace(0.2, 2., 10)))
+
+        results = results.groupby(x_name).mean()
+        results['bias'] = np.hypot(results['bias_x'],
+                                   results['bias_y'])
+        results['observed_drift'] = np.hypot(results['observed_drift_x'],
+                                             results['observed_drift_y'])
+        x = results['observed_drift']
+        # for metric in ['rmse', 'bias']:
+        for metric in ['bias']:
+            ax.plot(x, results[metric], label=LABELS[metric])
+
+        ax.set_xlabel(LABELS['observed_drift'], labelpad=LABELPAD_X)
 
 
 def set_row_labels(axes, labels):
@@ -110,7 +148,8 @@ if __name__ == '__main__':
     # matplotlib.rc('text.latex', preamble=r'\usepackage{unicode-math}')
     # matplotlib.rc('text.latex', preamble=r'\setmathfont{TeX Gyre DejaVu Math}[version=dejavu]')
 
-    CE = 'constrained_expansion_20190829'
+    CE = 'constrained_expansion'
+    # CE = 'constrained_expansion_20190829'
     RW = 'random_walk_20190829'
     SIMULATION = CE
 
@@ -125,7 +164,8 @@ if __name__ == '__main__':
     else:
         raise ValueError('Unknown simulation type: %s' % SIMULATION)
 
-    MOVEMENT_MODELS = ['rrw', 'cdrw'] #, 'rdrw']
+    # MOVEMENT_MODELS = ['rrw', 'cdrw'] #, 'rdrw']
+    MOVEMENT_MODELS = ['rrw']
     if SIMULATION == RW:
         FOSSIL_AGES = [0., 500., np.inf]
     else:
@@ -155,7 +195,7 @@ if __name__ == '__main__':
             #                  ax=axes[i,j])
             # plot_hpd_coverages(HPD_VALUES, SIMULATION, mm, fossil_age=foss_age,
             #                    x_name=x_name, ax=axes[i,j])
-            plot_error_stats_by_empirical_drift(SIMULATION, mm, fossil_age=foss_age, x_name=x_name, ax=axes[i,j])
+            plot_error_stats_by_empirical_drift_varying_overlap(SIMULATION, mm, fossil_age=foss_age, x_name=x_name, ax=axes[i,j])
 
     set_row_labels(axes, MOVEMENT_MODELS)
 

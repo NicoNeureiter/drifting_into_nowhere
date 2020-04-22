@@ -3,6 +3,7 @@
 from __future__ import absolute_import, division, print_function, \
     unicode_literals
 import logging
+from copy import copy
 
 import numpy as np
 
@@ -269,8 +270,9 @@ class Tree(object):
 
         hpd_pattern = r'%hpd_1={'
         p_hpd = None
-        if hpd_pattern in newick:
-            before_pattern, _, _ = newick.partition(hpd_pattern)
+        newick_lower = newick.lower()
+        if hpd_pattern in newick_lower:
+            before_pattern, _, _ = newick_lower.partition(hpd_pattern)
             _, _, p_hpd_str = before_pattern.rpartition('_')
             assert len(p_hpd_str) in [1, 2]
             p_hpd = int(p_hpd_str)
@@ -316,7 +318,7 @@ class Tree(object):
     def get_hpd(self, p_hpd, location_key='location'):
         """Extract the HPD from the attributes dict."""
         attr_keys = list(self.attributes.keys())
-        hpd_key_template = '{location_key}{i_axis}_{p_hpd}%hpdy_{i_polygon}'
+        hpd_key_template = '{location_key}{i_axis}_{p_hpd}%HPD_{i_polygon}'
         hpd_key_template = hpd_key_template.format(location_key=location_key,
                                                    p_hpd=p_hpd,
                                                    i_axis='{i_axis}',
@@ -340,6 +342,7 @@ class Tree(object):
             hpd_key_y = hpd_key_template.format(i_axis=2, i_polygon=i)
 
         if len(polygons) == 0:
+            print(attr_keys)
             logging.warning('No HPD polygon found!')
 
         return polygons
@@ -388,10 +391,12 @@ class Tree(object):
 
         was_leaf = (len(self.children) == 0)
 
+        # print(remove_list)
 
         # Recursively remove nodes
         for c in self.children.copy():
             if c in remove_list:
+                # print(':' + c.name)
                 self.children.remove(c)
             else:
                 c.remove_nodes(remove_list)
@@ -497,6 +502,17 @@ class Tree(object):
         self.children = []
         for c in other.children:
             self.add_child(c)
+
+    def copy(self):
+        other = Tree(length=self.length, name=self.name,
+                     attributes=copy(self.attributes),
+                     location=copy(self.location),
+                     alignment=copy(self.alignment))
+
+        for c in self.children:
+            other.add_child(c.copy())
+
+        return other
 
     def _format_location(self):
         # print(self.name)
@@ -967,3 +983,29 @@ def get_edge_diff_rate(parent, child):
     step = child.location - parent.location
     diff_rate = norm(step) / child.length
     return diff_rate
+
+
+def rename_nodes(tree, name_mapping):
+    for node in tree.iter_descendants():
+        assert node.name in name_mapping or node.name == '', node.name
+        if node.name in name_mapping:
+            node.name = name_mapping[node.name]
+
+
+def assign_lcations(tree, loc_mapping):
+    for node in tree.iter_descendants():
+        if node.name in loc_mapping:
+            node.location = loc_mapping[node.name]
+
+
+def naive_location_reconstruction(tree):
+    if tree.is_leaf():
+        assert tree.location is not None
+        return
+
+    if tree.location is None:
+        c_locs = []
+        for c in tree.children:
+            naive_location_reconstruction(c)
+            c_locs.append(c.location)
+        tree.location = np.mean(c_locs, axis=0)

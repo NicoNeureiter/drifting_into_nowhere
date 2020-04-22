@@ -74,7 +74,7 @@ class Experiment(object):
             run_id = self.format_params(var_params)
             LOGGER.info('\nRun experiment with settings: %s' % run_id)
             if run_id in checklist:
-                LOGGER.info('\tExperiment already in checklis.')
+                LOGGER.info('\tExperiment already in checklist.')
                 continue
 
             pipeline_args.update(var_params)

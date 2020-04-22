@@ -335,3 +335,9 @@ def delaunay_join_count(locations, labels):
     jc = pysal.explore.esda.Join_Counts(labels, graph)
     n_b = np.count_nonzero(labels)
     return jc.bb / (6*n_b - 12)
+
+def sample_random_subtree(tree, n_leaves):
+    leaves = tree.get_leafs()
+    leaves_drop = random.sample(leaves, tree.n_leafs() - n_leaves)
+    tree.remove_nodes(leaves_drop)
+    assert tree.n_leafs() == n_leaves

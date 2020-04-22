@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, \
-    unicode_literals
-import collections
-import random
-
 import numpy as np
+from copy import deepcopy
 
 from src.tree import Tree
 from src.util import newick_tree, bernoulli
@@ -173,7 +169,6 @@ class BirthDeathState(State):
         return child
 
 
-from copy import deepcopy
 def run_simulation(n_steps, root, world, condition_on_root=False):
     """Run a simulation for n_steps. The starting state is defined by ´root´,
     the environment is defined by ´world´.

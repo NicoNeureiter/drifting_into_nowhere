@@ -47,8 +47,8 @@ def tree_statistics(tree):
 
     # The number of fossils (non contemporary leafs) in the tree.
     stats['n_fossils'] = tree.n_fossils()
-    stats['observed_drift'] = observed_drift(tree)
-    stats['observed_drift_x'], stats['observed_drift_y'] = mean_offset(tree)
+    # stats['observed_drift'] = observed_drift(tree)
+    # stats['observed_drift_x'], stats['observed_drift_y'] = mean_offset(tree)
 
     # Global inbalance stats
     stats['imbalance'] = tree_imbalance(tree)
@@ -57,7 +57,7 @@ def tree_statistics(tree):
     # Raw size stats
     stats['size'] = tree.n_leafs()
 
-    DROP_FOSSILS = True
+    DROP_FOSSILS = False
     if DROP_FOSSILS:
         tree.drop_fossils()
 
@@ -73,7 +73,8 @@ def tree_statistics(tree):
     else:
         stats['space_div_dependence'] = np.nan
 
-    stats['clade_overlap'] = mean_clade_overlap(clades)
+    stats['clade_connectivity'] = mean_clade_overlap(clades)
+    stats['clade_overlap'] = 1 - 2*mean_clade_overlap(clades)
 
     return stats
 
@@ -96,6 +97,9 @@ def evaluate(working_dir, burnin, hpd_values, true_root):
 
     # Load posterior trees for other metrics
     trees = load_trees(working_dir + 'nowhere.trees')
+
+    LOGGER.info('\t\tTrue root: %s' % true_root)
+    LOGGER.info('\t\tRec. root: %s' % tree.location)
 
     # Compute and log RMSE
     rmse = eval_rmse(true_root, trees)
@@ -121,13 +125,6 @@ def evaluate(working_dir, burnin, hpd_values, true_root):
     return results
 
 
-def diffusion_rate(tree):
-    locs = tree.get_leaf_locations()
-    std = np.std(locs, axis=0)
-    # print(std)
-    return np.linalg.norm(std)
-
-
 def migration_rate(tree):
     if tree.is_leaf():
         return np.nan
@@ -136,13 +133,6 @@ def migration_rate(tree):
     dists = np.linalg.norm(diffs, axis=-1)
     rates = dists / tree.height()
     return np.mean(rates)
-
-
-def log_diversification_rate(tree):
-    if tree.is_leaf():
-        return np.nan
-    # return (tree.n_leafs() ** (1 / tree.height()) - 1) * 100.
-    return np.log(tree.n_leafs()) / tree.height()
 
 
 def _diffusion_rate(tree, height=None):

@@ -474,17 +474,18 @@ if __name__ == '__main__':
     exp_dir = experiment_preperations(WORKING_DIR, seed=369388681)
 
     # Analysis Parameters
-    CHAIN_LENGTH = 150000
+    CHAIN_LENGTH = 300000
     BURNIN = 20000
     HPD = 80
 
     # SIMULATION PARAMETER
     # N = 160
     N = 200
-    SPLIT_SIZE_RANGE = (70, 100)
-    N_STEPS = 5000
+    # SPLIT_SIZE_RANGE = (70, 100)
+    SPLIT_SIZE_RANGE = (10, 50)
+    N_STEPS = 500
     P_GROW_DISTR = beta(1., 1.).rvs
-    # P_CONFLICT = 0.
+    P_CONFLICT = 0.
 
     CONE_ANGLE = .2 * np.pi
     n = int(N / (CONE_ANGLE ** .5))
@@ -549,23 +550,23 @@ if __name__ == '__main__':
     # plt.axis('off')
     # plt.tight_layout(pad=0.)
     # plt.show()
-    #
+
     # # Create an XML file as input for the BEAST analysis
     # tree.write_beast_xml(output_path=XML_PATH, chain_length=CHAIN_LENGTH, movement_model='rrw')
     #
-    # # Run BEAST analysis
-    # run_beast(working_dir=WORKING_DIR)
-    # run_treeannotator(HPD, BURNIN, working_dir=WORKING_DIR)
+    # # # Run BEAST analysis
+    run_beast(working_dir=WORKING_DIR)
+    run_treeannotator(HPD, BURNIN, working_dir=WORKING_DIR)
 
     # Show original tree
     plot_tree(tree, color='k', lw=0.2)
     plot_root(tree.location, color=COLOR_ROOT_TRUE)
-    plt.scatter(*tree.get_leaf_locations().T, c='darkblue', s=3.)
+    # plt.scatter(*tree.get_leaf_locations().T, c='k', s=3.)
 
     # # Show reconstructed tree
-    # reconstructed = load_tree_from_nexus(tree_path=TREE_PATH)
-    # plot_root(reconstructed.location, color=COLOR_ROOT_EST)
-    # plot_hpd(reconstructed, HPD, alpha=0.5)
+    reconstructed = load_tree_from_nexus(tree_path=TREE_PATH)
+    plot_root(reconstructed.location, color=COLOR_ROOT_EST)
+    plot_hpd(reconstructed, HPD, alpha=0.5)
 
     # img_gray = np.mean(img, axis=-1)
     # plt.imshow(img_gray, origin='lower', cmap='gray')

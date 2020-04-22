@@ -227,8 +227,9 @@ class BackboneState(VectorState):
 
 
 if __name__ == '__main__':
+    import random
     from src.simulation.simulation import run_simulation
-    from src.plotting import plot_root, plot_tree
+    from src.plotting import plot_root, plot_tree, plot_tree_topology
     from src.config import COLOR_ROOT_TRUE, COLOR_SCATTER
     from src.util import grey
 
@@ -236,6 +237,8 @@ if __name__ == '__main__':
     rnd_seed = np.random.randint(0,4000000000)
     # print(rnd_seed)
     # rnd_seed = 3073416186
+    # rnd_seed = 3547844550
+    random.seed(rnd_seed)
     np.random.seed(rnd_seed)
     print('Random Seed:', rnd_seed)
 
@@ -243,7 +246,7 @@ if __name__ == '__main__':
     mean = 0.5 * np.ones(2)
     var = np.eye(2)
     clock_rate = 1.
-    birth_rate = 1.
+    birth_rate = .022
     drift_frequency = 0.5
 
     # Keep total mean fixed
@@ -255,11 +258,14 @@ if __name__ == '__main__':
 
     run_simulation(80, root, world)
 
-    print(root.n_leafs())
+    n = root.n_leafs()
 
-    plot_tree(root, lw=1., color_fun=get_edge_heights)
-    plt.scatter(*root.get_leaf_locations().T, c='k', s=5.)
-    plot_root((0,0), s=800, color='k')
+    # plot_tree(root, lw=1., color_fun=get_edge_heights)
+    # plt.scatter(*root.get_leaf_locations().T, c='k', s=5.)
+    # plot_root((0,0), s=800, color='k')
+
+    plot_tree_topology(root)
+    plt.scatter(range(n), np.zeros(n), color='k', s=10.)
 
     plt.axis('off')
     plt.tight_layout(pad=0.)

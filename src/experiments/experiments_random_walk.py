@@ -93,11 +93,13 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
         tree_simu = VectorState(world, p0, step_mean, step_var, clock_rate, birth_rate,
                                 drift_frequency=drift_density, death_rate=death_rate)
         tree_simu, world = run_simulation(n_steps, tree_simu, world, condition_on_root=True)
+        tree_simu.drop_fossils(max_fossil_age)
 
         # Check whether tree satisfies criteria...
         #    Criteria: not too small/big & root has two extant subtrees
         n_leafs = len([n for n in tree_simu.iter_leafs() if n.depth == n_steps])
         valid_tree = (min_leaves < n_leafs < max_leaves)
+
         if n_leafs < min_leaves:
             print('Invalid: Not enough leafs: %i' % n_leafs)
             continue
@@ -111,7 +113,6 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
                 break
 
         if valid_tree and (max_fossil_age > 0):
-            tree_simu.drop_fossils(max_fossil_age)
             if tree_simu.height() < n_steps:
                 valid_tree = False
                 print('Invalid: Tree lost in height!')
@@ -152,18 +153,22 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
 if __name__ == '__main__':
     HPD_VALUES = [80, 95]
 
+    # Tree size settings
+    SMALL = 50
+    NORMAL = 100
+    BIG = 300
+
     # Experiment CLI arguments
     MOVEMENT_MODEL = parse_arg(1, 'rrw')
-    MOVEMENT_MODEL = 'tree_statistics'
-    MAX_FOSSIL_AGE = parse_arg(2, 500, float)
+    MAX_FOSSIL_AGE = parse_arg(2, 0, int)
     N_REPEAT = parse_arg(3, 100, int)
-    MAX_FOSSIL_AGE = int(MAX_FOSSIL_AGE)
+    TREE_SIZE = parse_arg(4, SMALL, int)
 
     # Set working directory
     today = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
     # WORKING_DIR = 'experiments/random_walk/{mm}_fossils={max_age}/'.format(
-    WORKING_DIR = 'experiments/random_walk/{mm}/'.format(
-        mm=MOVEMENT_MODEL)
+    WORKING_DIR = 'experiments/random_walk/{mm}_treesize={treesize}/'.format(
+        mm=MOVEMENT_MODEL, treesize=TREE_SIZE)
     mkpath(WORKING_DIR)
 
     # Set cwd for logger
@@ -178,7 +183,7 @@ if __name__ == '__main__':
     default_settings = {
         # Simulation parameters
         'n_steps': 5000,
-        'n_expected_leafs': 100,
+        'n_expected_leafs': TREE_SIZE,
         'total_diffusion': 2000.,
         'total_drift': 0.,
         'drift_density': 1.,
@@ -223,4 +228,4 @@ if __name__ == '__main__':
 
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, N_REPEAT, WORKING_DIR)
-    experiment.run(resume=1)
+    experiment.run(resume=0)

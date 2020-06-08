@@ -27,22 +27,7 @@ FEATURES_TEMPLATE = '''\
             {features}
         </sequence>
 '''
-# LOCATION_TEMPLATE = ' '*24 + '{id}={x} {y}'
-# FEATURES_TEMPLATE = '    <sequence id="seq_{id}" taxon="{id}" totalcount="2" value="0"/>\n'
-# LEAF_TRAIT = '\t\t<leafTrait taxon="{id}"><parameter id="{id}.trait"/></leafTrait>\n'
-# GEO_PRIOR_REF = '\t\t\t< flatGeoSpatialPrior idref = "{id}_region"/>\n'
-
-# MONOPHYLY_STATISTIC = '\t<monophylyStatistic id="monophyly({id})"><mrca><taxa idref="{id}"/>'\
-#     '</mrca><treeModel idref="treeModel"/>\t</monophylyStatistic>\n'
-# GEO_PRIOR = '''\
-#   <flatGeoSpatialPrior id="{id}_region" taxon="{id}" kmlFileName="{kml_path}" inside="true" union="true">
-#       <data>
-#           <parameter idref="{id}.location"/>
-#       </data>
-#   </flatGeoSpatialPrior>
-# '''
 SPHERICAL = ' greatCircleDistance="true"'
-
 HEIGHT_OPERATORS = '''
         <scaleOperator scaleFactor="0.75" weight="3">
             <parameter idref="treeModel.rootHeight"/>
@@ -84,12 +69,3 @@ BEGIN TREES;
       TREE original_tree = {tree};
 END;
 '''
-
-
-################################################################################
-# Not used for now
-################################################################################
-
-FOSSILS = '\t<taxa id="{id}">\n{descendants}\n\t</taxa>\n'
-FOSSIL_CHILD = '\t\t<taxon idref="{id}"/>\n'
-

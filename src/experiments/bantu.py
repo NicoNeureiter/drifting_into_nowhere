@@ -45,7 +45,7 @@ def write_bantu_xml(xml_path, chain_length, root=None, exclude_outgroup=False,
     if exclude_outgroup:
         tree.remove_nodes_by_name(OUTGROUP_NAMES)
 
-    tree = tree.big_child().big_child().big_child()
+    # tree = tree.big_child().big_child().big_child()
 
     tree.write_beast_xml(xml_path, chain_length, root=root,
                          diffusion_on_a_sphere=True, movement_model=movement_model,
@@ -65,8 +65,6 @@ def write_bantu_sample_xml(xml_path, chain_length, root=None, exclude_outgroup=F
     for node in tree.iter_descendants():
         if node.name in name_map:
             node.name = name_map[node.name]
-
-    print(tree.to_newick())
 
     tree.load_locations_from_csv(LOCATIONS_PATH, swap_xy=True)
     leafs_without_locations = [node.name for node in tree.iter_leafs() if node.location is None]
@@ -110,7 +108,7 @@ if __name__ == '__main__':
     ADAPT_HEIGHT = False
     FIX_ROOT = False
 
-    SUFFIX = '_missingClades'
+    # SUFFIX = '_missingClades'
 
     WORKING_DIR = 'data/bantu_{model}_outgroup_{og}_adapttree_{at}_' + \
                   'adaptheight_{ah}_hpd_{hpd}{fixroot}{suffix}/'
@@ -127,14 +125,6 @@ if __name__ == '__main__':
     HOMELAND = np.array([10.5, 6.5])
     ax.scatter(*HOMELAND, marker='*', c=TURQUOISE, s=200, zorder=3)
 
-    # with open(NEWICK_TREE_PATH, 'r') as tree_file:
-    #     tree_str = tree_file.read().lower().strip()
-    # tree = Tree.from_newick(tree_str.strip())
-    # tree.load_locations_from_csv(LOCATIONS_PATH, swap_xy=True)
-    # locations = tree.get_leaf_locations()
-    # from workbench.map_projections import WorldMap
-    # locations.
-
     write_bantu_xml(BANTU_XML_PATH, CHAIN_LENGTH,
                    root=HOMELAND if FIX_ROOT else None,
                    exclude_outgroup=not USE_OUTGROUP,
@@ -150,7 +140,6 @@ if __name__ == '__main__':
     tree = load_tree_from_nexus(GEO_TREE_PATH)
     # trees = load_trees(GEO_TREES_PATH)
     okcool = tree.root_in_hpd(HOMELAND, HPD)
-    # print('\n\nOk cool: %r' % okcool)
 
     XLIM = (-20, 60)
     YLIM = (-35, 38)
@@ -159,7 +148,6 @@ if __name__ == '__main__':
     cmap = plt.get_cmap('viridis')
 
     plot_tree(tree, color='k', lw=LW, alpha=0.3)
-              # cmap=cmap, color_fun=flatten(invert(get_edge_heights), .7))
     root = tree.location
     plt.scatter(root[0], root[1], marker='*', c=PINK, s=200, zorder=3)
     # plot_hpd(tree, HPD)

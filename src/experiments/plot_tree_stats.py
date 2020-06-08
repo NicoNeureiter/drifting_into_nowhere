@@ -96,7 +96,6 @@ def get_clade_overlap(scenario, ax=None):
     results = load_experiment_results(scenario)
     return 1 - 2*results['clade_overlap']
 
-
 def set_row_labels(axes, labels):
     for ax, lbl in zip(axes[:, 0], labels):
         ax.set_ylabel(lbl + '        ', rotation=0, size='large')

@@ -16,7 +16,7 @@ from src.tree import get_edge_heights
 
 from src.util import (norm, normalize, total_diffusion_2_step_var,
                       total_drift_2_step_drift, experiment_preperations)
-from src.config import *
+from src.colors import *
 
 if __name__ == '__main__':
     WORKING_DIR = 'experiments/visualizations/'

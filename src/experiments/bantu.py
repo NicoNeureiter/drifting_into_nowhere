@@ -95,7 +95,7 @@ if __name__ == '__main__':
         read_nexus_name_mapping, load_trees
     from src.plotting import plot_hpd, plot_tree, plot_posterior_scatter
     from src.util import grey
-    from src.config import PINK, TURQUOISE
+    from src.colors import PINK, TURQUOISE
 
     world = gpd.read_file('data/naturalearth_50m_wgs84.geojson')
     ax = world.plot(color=grey(.95), edgecolor=grey(0.7), lw=.4, )

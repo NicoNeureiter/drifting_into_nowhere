@@ -14,7 +14,7 @@ from scipy.spatial.qhull import QhullError
 from src.tree import Tree
 from src.simulation.simulation import State
 from src.util import bounding_box, mkpath, grey
-from src.config import *
+from src.colors import *
 
 import matplotlib
 matplotlib.use('Qt5Agg')

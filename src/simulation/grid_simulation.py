@@ -15,7 +15,7 @@ from src.util import bernoulli, experiment_preperations
 # Plotting imports...
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from src.config import COLORS_RGB, gamma_transform, GREY_TONES
+from src.colors import COLORS_RGB, gamma_transform, GREY_TONES
 from src.plotting import plot_tree_topology, plot_edge
 
 

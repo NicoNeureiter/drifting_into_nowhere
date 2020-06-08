@@ -12,7 +12,7 @@ import numpy as np
 
 from src.experiments.experiment import Experiment
 from src.simulation.simulation import run_simulation
-from src.simulation.vector_simulation import VectorState, VectorWorld
+from src.simulation.migration_simulation import VectorState, VectorWorld
 from src.beast_interface import (run_beast)
 from src.evaluation import (evaluate, tree_statistics)
 from src.util import (total_drift_2_step_drift, total_diffusion_2_step_var,
@@ -76,6 +76,9 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
     birth_rate = eff_div_rate / (1 - turnover)
     death_rate = birth_rate * turnover
 
+    # b = e / (4/5) = e*5/4
+    # d = b * 1/5 = e*5/4/5 = e/4
+
     # Check parameter validity
     if True:
         assert 0 < drift_density <= 1
@@ -120,7 +123,7 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
                 valid_tree = False
                 print('Invalid: Not enough fossils (only %i)' % tree_simu.n_fossils())
 
-    print('Valid tree with %i fossils' % tree_simu.n_fossils())
+    print('Valid tree with %i leaves and %i fossils' % (tree_simu.n_leafs(), tree_simu.n_fossils()))
     if movement_model == 'tree_statistics':
         results = {}
 
@@ -162,13 +165,12 @@ if __name__ == '__main__':
     MOVEMENT_MODEL = parse_arg(1, 'rrw')
     MAX_FOSSIL_AGE = parse_arg(2, 0, int)
     N_REPEAT = parse_arg(3, 100, int)
-    TREE_SIZE = parse_arg(4, SMALL, int)
+    TREE_SIZE = parse_arg(4, NORMAL, int)
 
     # Set working directory
     today = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
-    # WORKING_DIR = 'experiments/random_walk/{mm}_fossils={max_age}/'.format(
-    WORKING_DIR = 'experiments/random_walk/{mm}_treesize={treesize}/'.format(
-        mm=MOVEMENT_MODEL, treesize=TREE_SIZE)
+    WORKING_DIR = 'experiments/random_walk/{mm}_treesize={treesize}_fossils={max_age}/'
+    WORKING_DIR = WORKING_DIR.format(mm=MOVEMENT_MODEL, treesize=TREE_SIZE, max_age=MAX_FOSSIL_AGE)
     mkpath(WORKING_DIR)
 
     # Set cwd for logger
@@ -200,29 +202,19 @@ if __name__ == '__main__':
         'hpd_values': HPD_VALUES
     }
 
-    TREE_STATS_COLS = [
-        'size', 'n_fossils', 'imbalance',
-        # 'size_0_small', 'size_0_big', 'size_1_small', 'size_1_big', 'size_2_small', 'size_2_big',
-        # 'imbalance_0', 'imbalance_1', 'imbalance_2', 'imbalance_3',
-        # 'migr_rate_0', 'migr_rate_0_small', 'migr_rate_0_big', 'migr_rate_1_small', 'migr_rate_1_big', 'migr_rate_2_small', 'migr_rate_2_big',
-        # 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big', 'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
-        # 'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small', 'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big',
-        'space_div_dependence', 'clade_overlap', 'deep_imbalance']
+    EVAL_METRICS = ['size', 'imbalance', 'deep_imbalance',
+                    'space_div_dependence', 'clade_overlap']
 
-    if MOVEMENT_MODEL == 'tree_statistics':
-        EVAL_METRICS = TREE_STATS_COLS
-    else:
-        EVAL_METRICS = (TREE_STATS_COLS +
-                       ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] +
-                       ['hpd_%i' % p for p in HPD_VALUES] +
-                       ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm'])
+    if MOVEMENT_MODEL != 'tree_statistics':
+        EVAL_METRICS += ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
+                        ['hpd_%i' % p for p in HPD_VALUES] + \
+                        ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm']
 
     # Safe the default settings
     with open(WORKING_DIR+'settings.json', 'w') as json_file:
         json.dump(default_settings, json_file)
 
     # Run the experiment
-    # total_drift_values = np.linspace(0., 3., 13) * default_settings['total_diffusion']
     total_drift_values = np.linspace(0., 3., 7) * default_settings['total_diffusion']
     variable_parameters = {'total_drift': total_drift_values}
 

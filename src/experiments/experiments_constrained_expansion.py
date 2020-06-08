@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from __future__ import absolute_import, division, print_function, \
-    unicode_literals
 import logging
 import os
 import sys
@@ -13,9 +11,8 @@ import numpy as np
 from src.experiments.experiment import Experiment
 from src.evaluation import evaluate, tree_statistics
 from src.simulation.simulation import run_simulation
-from src.simulation.grid_simulation import init_cone_simulation
+from src.simulation.expansion_simulation import init_cone_simulation
 from src.beast_interface import run_beast
-from src.tree import tree_imbalance
 from src.util import mkpath, parse_arg
 
 
@@ -84,14 +81,19 @@ def run_experiment(n_steps, grid_size, cone_angle, split_size_range,
 if __name__ == '__main__':
     HPD_VALUES = [80, 95]
 
-    # MOVEMENT MODEL
-    # MOVEMENT_MODEL = parse_arg(1, 'rrw')
-    MOVEMENT_MODEL = 'tree_statistics'
+    # Tree size settings
+    SMALL = 50
+    NORMAL = 100
+    BIG = 300
+
+    # Command line arguments
+    MOVEMENT_MODEL = parse_arg(1, 'rrw')
     N_REPEAT = parse_arg(2, 100, int)
-    MOVEMENT_MODEL = parse_arg(1, MOVEMENT_MODEL)
+    TREE_SIZE = parse_arg(3, NORMAL, int)
 
     # Set working directory
-    WORKING_DIR = 'experiments/constrained_expansion/%s/' % MOVEMENT_MODEL
+    WORKING_DIR = 'experiments/constrained_expansion/{mm}_treesize={treesize}/'
+    WORKING_DIR = WORKING_DIR.format(mm=MOVEMENT_MODEL, treesize=TREE_SIZE)
     mkpath(WORKING_DIR)
 
     # Set cwd for logger
@@ -108,38 +110,34 @@ if __name__ == '__main__':
         'grid_size': 200,
         'split_size_range': (70,100),
     }
+    if TREE_SIZE == SMALL:
+        simulation_settings['split_size_range'] = (140, 200)
+    elif TREE_SIZE == BIG:
+        simulation_settings['split_size_range'] = (25, 33)
 
     default_settings = {
         # Analysis Parameters
         'movement_model': MOVEMENT_MODEL,
-        'chain_length': 1000000,
-        'burnin': 100000,
+        'chain_length': 200000,
+        'burnin': 20000,
         # Experiment Settings
         'hpd_values': HPD_VALUES
     }
     default_settings.update(simulation_settings)
 
-    if MOVEMENT_MODEL == 'tree_statistics':
-        EVAL_METRICS = [
-            'size', 'imbalance',
-            # 'size_0_small', 'size_0_big', 'size_1_small', 'size_1_big', 'size_2_small', 'size_2_big',
-            # 'imbalance_0', 'imbalance_1', 'imbalance_2', 'imbalance_3',
-            # 'migr_rate_0', 'migr_rate_0_small', 'migr_rate_0_big', 'migr_rate_1_small', 'migr_rate_1_big', 'migr_rate_2_small', 'migr_rate_2_big',
-            # 'drift_rate_0', 'drift_rate_0_small', 'drift_rate_0_big', 'drift_rate_1_small', 'drift_rate_1_big', 'drift_rate_2_small', 'drift_rate_2_big',
-            # 'log_div_rate_0', 'log_div_rate_0_small', 'log_div_rate_0_big', 'log_div_rate_1_small', 'log_div_rate_1_big', 'log_div_rate_2_small', 'log_div_rate_2_big',
-            'space_div_dependence', 'clade_overlap', 'deep_imbalance']
+    EVAL_METRICS = ['size', 'imbalance', 'deep_imbalance',
+                    'space_div_dependence', 'clade_overlap']
 
-    else:
-        EVAL_METRICS = ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
-                       ['hpd_%i' % p for p in HPD_VALUES] + \
-                       ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm']
+    if MOVEMENT_MODEL != 'tree_statistics':
+        EVAL_METRICS += ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
+                        ['hpd_%i' % p for p in HPD_VALUES] + \
+                        ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm']
 
     # Safe the default settings
     with open(WORKING_DIR+'settings.json', 'w') as json_file:
         json.dump(default_settings, json_file)
 
     # Run the experiment
-    # variable_parameters = {'cone_angle': np.linspace(0.2,2,12) * np.pi}
     variable_parameters = {'cone_angle': np.linspace(0.25, 2, 8) * np.pi}
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, N_REPEAT, WORKING_DIR)

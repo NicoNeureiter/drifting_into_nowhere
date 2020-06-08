@@ -3,18 +3,14 @@
 import random
 
 import numpy as np
-# import scipy as sp
 from scipy.ndimage.morphology import binary_dilation
 from scipy.stats import beta
 
 from src.simulation.simulation import World, State
-from src.util import bernoulli, experiment_preperations
+from src.util import bernoulli
 
-# Plotting imports...
 import matplotlib.pyplot as plt
-# import matplotlib.animation as animation
-from src.config import COLORS_RGB
-from src.plotting import plot_tree_topology, plot_edge
+from src.plotting import plot_edge
 
 
 DEBUG = True
@@ -121,11 +117,6 @@ class GridState(State):
         self.area = np.count_nonzero(self.cells)
 
         self.is_neighbour = neighbourhood(self.cells)
-        # self.neighbours = grid_to_index_tuples(self.is_neighbour)
-
-    # @property
-    # def area(self):
-    #     return np.count_nonzero(self.cells)
 
     def valid_index(self, i, j):
         return (0 <= i < self.cells.shape[0]) and (0 <= j < self.cells.shape[1])
@@ -212,7 +203,6 @@ class GridState(State):
         cells_1[rows, cols] = False
         cells_2[rows, cols] = True
 
-        # print('SPLIT! New sizes: (%i, %i)' % (np.count_nonzero(cells_1), np.count_nonzero(cells_2)))
         return cells_1, cells_2
 
     def split(self):
@@ -260,7 +250,6 @@ class GridWorld(World):
         self.km_per_cell = km_per_cell
 
         self.center = np.zeros(2)
-        # self.site_grid
 
     @property
     def shape(self):
@@ -300,23 +289,6 @@ class GridWorld(World):
                 return False
 
 
-def plot_gridtree(tree, colors, img=None):
-    h, w = tree.grid_size
-
-    if img is None:
-        img = 255 * np.ones((h, w, 3), dtype=int)
-
-    for i, state in enumerate(tree.iter_descendants()):
-        img[state.cells] = colors[i]
-
-    plt.imshow(img, origin='lower')
-
-    for parent, child in tree.iter_edges():
-        plot_edge(parent, child, no_arrow=False, lw=0.2, color='k')
-
-    return img
-
-
 def filter_angles(x, y, min_angle=0, max_angle=2*np.pi):
     angles = np.arctan2(y, x) % (2*np.pi)
     return np.logical_and(min_angle <= angles, angles <= max_angle)
@@ -325,12 +297,6 @@ def filter_angles(x, y, min_angle=0, max_angle=2*np.pi):
 def filter_max_norm(x, y, max_norm):
     norms = np.hypot(x, y)
     return norms <= max_norm
-
-
-def filter_min_norm(x, y, min_norm):
-    norms = np.hypot(x, y)
-    return norms >= min_norm
-
 
 
 def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5,
@@ -347,17 +313,19 @@ def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5,
     y = y - cy
     cone_grid = filter_angles(x, y, min_angle=0, max_angle=cone_angle)
     cone_grid &= filter_max_norm(x, y, min(cx, cy))
-    # cone_grid &= filter_min_norm(x, y, corner_cutoff)
 
+    # Find the bounding box of the cone (i.e. of the non-empty cells)
     non_empty_cols = np.any(cone_grid, axis=0)
     left = np.where(non_empty_cols)[0][0]
     non_empty_rows = np.any(cone_grid, axis=1)
     bottom = np.where(non_empty_rows)[0][0]
     top = np.where(non_empty_rows)[0][-1]
 
+    # Crop the grid to the bounding box (for performance)
     cone_grid = cone_grid[bottom:top, left:]
     grid_size = cone_grid.shape
 
+    # Allow at most 3 populations in one cell
     max_density = 3
     world.occupancy_grid = (max_density * ~cone_grid)
     world.support = cone_grid
@@ -379,132 +347,4 @@ def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5,
     for _ in range(initial_size-1):
         s0.grow()
 
-    # img = np.array([1-world.occupancy_grid]*3).transpose((1,2,0)) * 255
-
     return world, s0, img
-
-
-def sample_random_subtree(tree, n_leaves):
-    leaves = tree.get_leafs()
-    leaves_drop = random.sample(leaves, tree.n_leafs() - n_leaves)
-    tree.remove_nodes(leaves_drop)
-    assert tree.n_leafs() == n_leaves
-
-
-if __name__ == '__main__':
-    from src.simulation.simulation import run_simulation
-    from src.beast_interface import run_beast, run_treeannotator, load_tree_from_nexus
-    from src.plotting import plot_tree, plot_hpd, plot_root
-    from src.config import COLOR_ROOT_TRUE, COLOR_ROOT_EST
-    from src.evaluation import tree_statistics
-
-    WORKING_DIR = 'data/gridworld/'
-    XML_PATH = WORKING_DIR + 'nowhere.xml'
-    TREE_PATH = WORKING_DIR + 'nowhere.tree'
-    exp_dir = experiment_preperations(WORKING_DIR)
-    # exp_dir = experiment_preperations(WORKING_DIR, seed=369388681)
-
-    # Analysis Parameters
-    CHAIN_LENGTH = 150000
-    BURNIN = 20000
-    HPD = 80
-
-    # SIMULATION PARAMETER
-    N = 350
-    KM_PER_CELL = 100.
-    P_GROW = 0.9
-    P_GROW_N = 80
-    p_grow_distr = beta(P_GROW_N * P_GROW, P_GROW_N * (1 - P_GROW)).rvs
-
-    # SPLIT = {.0: 18, .2: 30, .4: 40, .5: 45, .6: 50, .8: 60, 1.: 70}
-    # N_STEPS = {.0: 90, .2: 126, .4: 146, .5: 150, .6: 153, .8: 160, 1.: 165}
-
-    SPLIT = {.0:   18,
-             .5:   46,
-             1.:   70}
-    N_STEPS = {.0:  105,
-               .5:  166,
-               1.:  180,}
-
-    DEATH_RATE = 0
-
-    TREE_SIZE = 150
-
-
-    for P_CONFLICT in [.0, .5, 1.]:
-    # for P_CONFLICT in [.0, .2, .4, .6, .8, 1.]:
-
-        print('P_CONFLICT =', P_CONFLICT)
-        split_range = (SPLIT[P_CONFLICT], SPLIT[P_CONFLICT] + 5)
-
-        CONE_ANGLE = 2. * np.pi
-        n = int(N / (CONE_ANGLE ** .5))
-
-        sizes = []
-        offsets = []
-        overlaps = []
-        imbalances = []
-        sd_deps = []
-
-        for _ in range(3):
-            world, root, img = init_cone_simulation(grid_size=(n, n), p_grow_distr=p_grow_distr,
-                                                        cone_angle=CONE_ANGLE,
-                                                        split_size_range=split_range,
-                                                        km_per_cell=KM_PER_CELL, p_conflict=P_CONFLICT,
-                                                        death_rate=DEATH_RATE)
-
-            run_simulation(N_STEPS[P_CONFLICT], root, world, condition_on_root=True)
-            root.drop_fossils()
-
-            tree = root
-            leafs_mean = np.mean(tree.get_leaf_locations(), axis=0)
-            leafs_mean_offset = leafs_mean - root.location
-            offset = np.hypot(*leafs_mean_offset)
-
-            print('\tn_leaves:', tree.n_leafs())
-            print('\tobserved_drift:', leafs_mean_offset)
-            print('\tobserved_drift_norm: %.2f' % offset)
-            sizes.append(root.n_leafs())
-            offsets.append(offset)
-
-
-
-            tree_stats = tree_statistics(tree)
-            print('\ttree stats:', tree_stats)
-            overlaps.append(tree_stats['clade_overlap'])
-            imbalances.append(tree_stats['imbalance'])
-            sd_deps.append(tree_stats['space_div_dependence'])
-
-        # print()
-        print('Mean size = %.2f' % np.mean(sizes))
-        print('Mean drift = %.2f' % np.mean(offsets))
-        print('Mean overlap = %.2f' % np.mean(overlaps))
-        print('Mean imbalance = %.2f' % np.mean(imbalances))
-        print('Mean S-D dep. = %.2f' % np.mean(sd_deps))
-        print()
-
-    # Show original tree
-    # plot_gridtree(tree, colors=COLORS_RGB)
-    plot_tree(tree, color='k', lw=0.2)
-    plot_root(tree.location, color=COLOR_ROOT_TRUE)
-
-    # Create an XML file as input for the BEAST analysis
-    tree.write_beast_xml(output_path=XML_PATH, chain_length=CHAIN_LENGTH, movement_model='rrw')
-
-    # Run BEAST analysis
-    run_beast(working_dir=WORKING_DIR)
-    run_treeannotator(HPD, BURNIN, working_dir=WORKING_DIR)
-
-    # # Show reconstructed tree
-    reconstructed = load_tree_from_nexus(tree_path=TREE_PATH)
-    plot_root(reconstructed.location, color=COLOR_ROOT_EST)
-    plot_hpd(reconstructed, HPD, alpha=0.5)
-
-
-    img_gray = np.mean(img, axis=-1)
-    plt.imshow(img_gray, origin='lower', cmap='gray', zorder=0)
-
-    plt.axis('off')
-    plt.tight_layout(pad=0.)
-
-    plt.show()

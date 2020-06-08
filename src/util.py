@@ -274,7 +274,6 @@ def experiment_preperations(work_dir, seed=None):
     base_file = Path(base_file)
     shutil.copy(base_file, exp_dir)
     shutil.copy(__file__, exp_dir)
-    shutil.copy('src/config.py', exp_dir)
 
     # Generate random seed
     if seed is None:

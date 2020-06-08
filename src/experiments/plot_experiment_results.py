@@ -11,9 +11,11 @@ LABELPAD_Y = 15
 LABELS = {
     'total_drift': 'Total trend',
     'cone_angle': 'Cone angle',
-    'observed_drift': 'Observed trend',
+    'observed_drift': 'Directional trend',
     'rmse': 'RMSE',
     'bias': 'Bias',
+    'hpd_80': '80% HPD',
+    'hpd_95': '95% HPD',
 }
 
 # def plot_hpd_coverages(hpd_values, simulation, movement_model, fossil_age=None,
@@ -74,12 +76,9 @@ def plot_error_stats_by_empirical_drift(simulation, movement_model, fossil_age=N
     results = results
 
     x = results['observed_drift_norm']
-    for metric in ['rmse', 'bias_norm']:
-        ax.scatter(x, results[metric].values, s=1., alpha=0.1)
-        # plt.show()
-
-    # print(len(np.unique(results[x_name].to_numpy()) / np.pi))
-    # print(len(np.linspace(0.2, 2., 10)))
+    if not PLOT_HPD:
+        for metric in ['rmse', 'bias_norm']:
+            ax.scatter(x, results[metric].values, s=1., alpha=0.1)
 
     results = results.groupby(x_name).mean()
     results['bias'] = np.hypot(results['bias_x'],
@@ -87,75 +86,90 @@ def plot_error_stats_by_empirical_drift(simulation, movement_model, fossil_age=N
     results['observed_drift'] = np.hypot(results['observed_drift_x'],
                                          results['observed_drift_y'])
     x = results['observed_drift']
-    for metric in ['rmse', 'bias']:
-        ax.plot(x, results[metric], label=LABELS[metric])
+    if PLOT_HPD:
+        for hpd in HPD_VALUES:
+            metric = 'hpd_%i'% hpd
+            ax.plot(x, results[metric], label=LABELS[metric])
+    else:
+        for metric in ['rmse', 'bias']:
+            ax.plot(x, results[metric], label=LABELS[metric])
 
     ax.set_xlabel(LABELS['observed_drift'], labelpad=LABELPAD_X)
 
-def plot_error_stats_by_empirical_drift_varying_overlap(simulation, movement_model, fossil_age=None,
-                                                        x_name='cone_angle', ax=None):
+
+def plot_error_stats_by_empirical_drift_varying_tree_size(simulation, movement_model, tree_size,
+                                                          x_name='cone_angle', ax=None):
     if ax is None:
         ax = plt.gca()
 
-    for overlap in [0.0, 0.5, 1.0]:
-        working_dir = os.path.join('experiments',
-                                   simulation + '_overlap_%s' % overlap,
-                                   movement_model)
-        results_csv_path = os.path.join(working_dir, 'results.csv')
-        results = pd.read_csv(results_csv_path)
-        results = results
+    working_dir = os.path.join('experiments', simulation, movement_model + '_treesize=%i' % tree_size)
+    results_csv_path = os.path.join(working_dir, 'results.csv')
+    results = pd.read_csv(results_csv_path)
+    results = results
 
-        x = results['observed_drift_norm']
-        # for metric in ['rmse', 'bias_norm']:
-        for metric in ['bias_norm']:
+    x = results['observed_drift_norm']
+    if not PLOT_HPD:
+        for metric in ['rmse', 'bias_norm']:
             ax.scatter(x, results[metric].values, s=1., alpha=0.1)
-            # plt.show()
 
-        # print(len(np.unique(results[x_name].to_numpy()) / np.pi))
-        # print(len(np.linspace(0.2, 2., 10)))
-
-        results = results.groupby(x_name).mean()
-        results['bias'] = np.hypot(results['bias_x'],
-                                   results['bias_y'])
-        results['observed_drift'] = np.hypot(results['observed_drift_x'],
-                                             results['observed_drift_y'])
-        x = results['observed_drift']
-        # for metric in ['rmse', 'bias']:
-        for metric in ['bias']:
+    results = results.groupby(x_name).mean()
+    results['bias'] = np.hypot(results['bias_x'],
+                               results['bias_y'])
+    results['observed_drift'] = np.hypot(results['observed_drift_x'],
+                                         results['observed_drift_y'])
+    x = results['observed_drift']
+    if PLOT_HPD:
+        for hpd in HPD_VALUES:
+            metric = 'hpd_%i'% hpd
+            ax.plot(x, results[metric], label=LABELS[metric])
+    else:
+        for metric in ['rmse', 'bias']:
             ax.plot(x, results[metric], label=LABELS[metric])
 
-        ax.set_xlabel(LABELS['observed_drift'], labelpad=LABELPAD_X)
+    ax.set_xlabel(LABELS['observed_drift'], labelpad=LABELPAD_X)
 
 
 def set_row_labels(axes, labels):
-    for ax, lbl in zip(axes[:, 0], labels):
-        ax.set_ylabel(str.upper(lbl), rotation=90, size='large', labelpad=LABELPAD_Y)
+    for ax, lbl in zip(axes[:, -1], labels):
+        x = ax.get_xlim()[1]
+        y = 0.42 * ax.get_ylim()[1]
+        ax.text(x, y, str.upper(lbl), rotation=-90, size='large')
 
 
 def set_column_labels(axes, labels):
     for ax, lbl in zip(axes[0], labels):
-        ax.set_title(lbl)
+        ax.set_title(lbl, pad=8)
+
+
+def format_fossil_age(age):
+    if age == 0:
+        return 'No historical data'
+    elif np.isfinite(age):
+        return 'Sample age$\leq %i$' % age
+    else:
+        return 'All sample ages'
 
 
 if __name__ == '__main__':
     import matplotlib
-    # matplotlib.use('ps')
     plt.rcParams.update({'font.size': 16})
     matplotlib.rc('xtick', labelsize=12)
     matplotlib.rc('ytick', labelsize=12)
-    # matplotlib.rc('text', usetex=True)
-    # matplotlib.rc('text.latex', preamble=r'\usepackage{color}')
-    # matplotlib.rc('text.latex', preamble=r'\usepackage{unicode-math}')
-    # matplotlib.rc('text.latex', preamble=r'\setmathfont{TeX Gyre DejaVu Math}[version=dejavu]')
 
-    CE = 'constrained_expansion'
-    # CE = 'constrained_expansion_20190829'
+    # CE = 'constrained_expansion'
+    CE = 'constrained_expansion_20190829'
+    # RW = 'random_walk'
     RW = 'random_walk_20190829'
-    SIMULATION = CE
 
-    HPD_VALUES = [80, 95]
+    SIMULATION = RW
+    # SIMULATION = CE
+
+    HPD_VALUES = [95, 80]
     # MOVEMENT_MODEL = 'brownian'
     MOVEMENT_MODEL = 'rrw'
+
+    PLOT_HPD = 1
+    VARY_TREE_SIZE = 0
 
     if SIMULATION == RW:
         x_name = 'total_drift'
@@ -164,58 +178,84 @@ if __name__ == '__main__':
     else:
         raise ValueError('Unknown simulation type: %s' % SIMULATION)
 
-    # MOVEMENT_MODELS = ['rrw', 'cdrw'] #, 'rdrw']
-    MOVEMENT_MODELS = ['rrw']
+    MOVEMENT_MODELS = ['rrw', 'cdrw']#, 'rdrw']
     if SIMULATION == RW:
         FOSSIL_AGES = [0., 500., np.inf]
     else:
         FOSSIL_AGES = [None]
+    TREE_SIZES = [50, 100, 300]
 
-    fig, axes = plt.subplots(len(MOVEMENT_MODELS), len(FOSSIL_AGES),
-                             sharex=True, sharey=True)
+    n_rows = len(MOVEMENT_MODELS)
+    n_cols = len(TREE_SIZES) if VARY_TREE_SIZE else len(FOSSIL_AGES)
+    fig, axes = plt.subplots(n_rows, n_cols,
+                             figsize=(2.8 + 3*n_cols, 2 + 3*n_rows),
+                             sharex=False, sharey=False)
 
-    if len(FOSSIL_AGES) == 1:
-        axes = axes[:, np.newaxis]
+    if len(MOVEMENT_MODELS) == 1:
+        axes = np.array([axes])
+    if VARY_TREE_SIZE:
+        if len(TREE_SIZES) == 1:
+            axes = axes[:, np.newaxis]
+        else:
+            set_column_labels(axes, ['Tree size = %i' % ts for ts in TREE_SIZES])
     else:
-        col_labels = []
-        for age in FOSSIL_AGES:
-            if age == 0:
-                col_labels.append('No ancient samples')
-            elif np.isfinite(age):
-                # col_labels.append('Sample age ⩽ %i' % age)
-                col_labels.append('Sample age$\leq %i$' % age)
-            else:
-                col_labels.append('All ancient samples')
-        set_column_labels(axes, col_labels)
-
+        if len(FOSSIL_AGES) == 1:
+            axes = axes[:, np.newaxis]
+            set_column_labels(axes, map(format_fossil_age, [0.]))
+        else:
+            set_column_labels(axes, map(format_fossil_age, FOSSIL_AGES))
 
     for i, mm in enumerate(MOVEMENT_MODELS):
-        for j, foss_age in enumerate(FOSSIL_AGES):
-            # plot_error_stats(SIMULATION, mm, fossil_age=foss_age, x_name=x_name,
-            #                  ax=axes[i,j])
-            # plot_hpd_coverages(HPD_VALUES, SIMULATION, mm, fossil_age=foss_age,
-            #                    x_name=x_name, ax=axes[i,j])
-            plot_error_stats_by_empirical_drift_varying_overlap(SIMULATION, mm, fossil_age=foss_age, x_name=x_name, ax=axes[i,j])
+        if VARY_TREE_SIZE:
+            for j, tree_size in enumerate(TREE_SIZES):
+                plot_error_stats_by_empirical_drift_varying_tree_size(SIMULATION, mm, tree_size=tree_size, x_name=x_name, ax=axes[i, j])
+        else:
+            for j, foss_age in enumerate(FOSSIL_AGES):
+                plot_error_stats_by_empirical_drift(SIMULATION, mm, fossil_age=foss_age, x_name=x_name, ax=axes[i, j])
 
-    set_row_labels(axes, MOVEMENT_MODELS)
+    # Define legend location
+    axes[0, -1].legend(loc=1)
 
+    # Adjust axis limits and ticks
+    if PLOT_HPD:
+        for ax in axes.flatten():
+            # Add reference lines at the HPD thresholds
+            ax.axhline(0.8, color='lightgrey', ls='dotted', zorder=0)
+            ax.axhline(0.95, color='lightgrey', ls='dotted', zorder=0)
+            ax.set_ylim(0, 1.01)
+            ax.set_yticks([])
 
-    # plot_error_stats(SIMULATION, MOVEMENT_MODEL, x_name=x_name, fossil_age=None)
-    # plot_error_stats_by_empirical_drift(SIMULATION, MOVEMENT_MODEL, x_name=x_name)
+        for ax in axes[:, 0]:
+            ax.set_yticks([0.0, 0.2, 0.4, 0.6, 0.8, 0.95])
+            ax.set_yticklabels([0, 20, 40, 60, 80, 95])
 
-
-    plt.ylim(0, 9500)
-    plt.gca().set_yticks(np.linspace(0, 8000, 5))
-
-    if SIMULATION == RW:
-        axes[0, 2].legend(loc=1)
-        plt.xlim(0, 5800)
-        plt.gca().set_xticks(np.linspace(0, 4000, 3))
-        plt.subplots_adjust(left=0.2, right=0.87, top=0.953, bottom=0.095, wspace=0, hspace=0)
     else:
-        axes[0, 0].legend(loc=1)
-        plt.xlim(0, 7000)
-        plt.gca().set_xticks(np.linspace(0, 6000, 4))
-        plt.subplots_adjust(left=0.25, right=0.82, top=0.953, bottom=0.095, wspace=0, hspace=0)
+        for ax in axes.flatten():
+            ax.set_ylim(0, 8000)
+            ax.set_yticks([])
+
+        for ax in axes[:, 0]:
+            ax.set_yticks(np.linspace(0, 6000, 4))
+
+    # Fix x-axis
+    for ax in axes.flatten():
+        ax.set_xlim(0, 6400)
+        ax.set_xticks([])
+    for ax in axes[-1]:
+        ax.set_xticks(np.linspace(0, 6000, 4))
+    for ax in axes[:-1].flatten():
+        ax.set_xlabel('')
+
+    # Set row labels, if needed
+    if len(MOVEMENT_MODELS) > 1:
+        set_row_labels(axes, MOVEMENT_MODELS)
+
+    # Adjust the spacing between and around subplots
+    if n_rows == 1:
+        plt.subplots_adjust(left=0.05, right=0.97, top=0.96, bottom=0.12, wspace=0.05, hspace=0.05)
+    if n_rows == 2:
+        plt.subplots_adjust(left=0.05, right=0.97, top=0.96, bottom=0.072, wspace=0.05, hspace=0.05)
+    if n_cols == 1:
+        plt.subplots_adjust(left=0.1, right=0.94)
 
     plt.show()

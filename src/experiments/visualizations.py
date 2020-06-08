@@ -6,7 +6,7 @@ import logging
 
 import matplotlib.pyplot as plt
 
-from src.simulation.vector_simulation import VectorWorld, VectorState, BackboneState
+from src.simulation.migration_simulation import VectorWorld, VectorState
 from src.simulation.simulation import run_simulation
 from src.beast_interface import run_beast, run_treeannotator, \
     load_tree_from_nexus, load_trees

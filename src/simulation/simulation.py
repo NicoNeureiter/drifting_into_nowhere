@@ -241,30 +241,3 @@ def run_backbone_simulation(n_steps, root, world, backbone_steps=None):
     for _ in range(n_steps - backbone_steps):
         for state in list(world.sites):
             state.step()
-
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-    from src.plotting import plot_tree_topology
-    from src.tree import tree_imbalance
-
-    imbalance_scores = []
-    for _ in range(100):
-        world = World()
-        root = BirthDeathState(world=world, birth_rate=1., death_rate=0., clock_rate=0.05)
-        print(root.name)
-        tree, world = run_simulation(100, root, world, condition_on_root=True)
-        tree.drop_fossils()
-
-        print(tree.n_leafs())
-        imb = tree_imbalance(tree, weight_by_age=True)
-        print(imb)
-
-        if not np.isfinite(imb):
-            plot_tree_topology(tree)
-            plt.show()
-        else:
-            imbalance_scores.append(imb)
-
-    print()
-    print(np.mean(imbalance_scores))

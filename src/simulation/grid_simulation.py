@@ -284,7 +284,7 @@ def plot_gridtree(tree, colors, img=None):
     for i, state in enumerate(tree.iter_descendants()):
         img[state.cells] = colors[i]
 
-    # plt.imshow(img, origin='lower')
+    plt.imshow(img, origin='lower')
 
     for parent, child in tree.iter_edges():
         plot_edge(parent, child, no_arrow=False, lw=0.2, color='k')
@@ -380,8 +380,6 @@ def init_cone_simulation(grid_size, p_grow_distr, cone_angle=5.5,
 
 
 def animate_grid_world():
-    global states, img, ax
-    # world, s0, img = init_bantu_simulation()
     P_GROW_DISTR = beta(1., 1.).rvs
     world, s0, img = init_cone_simulation((90, 160), p_grow_distr=P_GROW_DISTR,
                                           cone_angle=np.random.random()*np.pi*2,
@@ -423,67 +421,3 @@ def animate_grid_world():
     plt.tight_layout(pad=0.)
     # anim.save('results/grid_simulation.mp4', writer=writer, dpi=6)
     plt.show()
-
-
-
-if __name__ == '__main__':
-    from src.simulation.simulation import run_simulation
-    from src.beast_interface import run_beast, run_treeannotator, load_tree_from_nexus
-    from src.plotting import plot_tree, plot_hpd, plot_root
-    from src.config import COLOR_ROOT_TRUE, COLOR_ROOT_EST
-
-    WORKING_DIR = 'data/gridworld/'
-    XML_PATH = WORKING_DIR + 'nowhere.xml'
-    TREE_PATH = WORKING_DIR + 'nowhere.tree'
-    exp_dir = experiment_preperations(WORKING_DIR, seed=369388681)
-
-    # Analysis Parameters
-    CHAIN_LENGTH = 300000
-    BURNIN = 20000
-    HPD = 80
-
-    # SIMULATION PARAMETER
-    N = 200
-    SPLIT_SIZE_RANGE = (10, 50)
-    N_STEPS = 500
-    P_GROW_DISTR = beta(1., 1.).rvs
-    P_CONFLICT = 0.
-
-    CONE_ANGLE = .2 * np.pi
-    n = int(N / (CONE_ANGLE ** .5))
-    world, root, img = init_cone_simulation(grid_size=(n, n), p_grow_distr=P_GROW_DISTR,
-                                            cone_angle=CONE_ANGLE,
-                                            split_size_range=SPLIT_SIZE_RANGE,
-                                            km_per_cell=100.)
-    run_simulation(int(N_STEPS), root, world)
-    tree = root
-
-    leafs_mean = np.mean(tree.get_leaf_locations(), axis=0)
-    leafs_mean_offset = leafs_mean - root.location
-
-    # Create an XML file as input for the BEAST analysis
-    tree.write_beast_xml(output_path=XML_PATH, chain_length=CHAIN_LENGTH, movement_model='rrw')
-
-    # Run BEAST analysis
-    run_beast(working_dir=WORKING_DIR)
-    run_treeannotator(HPD, BURNIN, working_dir=WORKING_DIR)
-
-    # Show original tree
-    plot_tree(tree, color='k', lw=0.2)
-    plot_root(tree.location, color=COLOR_ROOT_TRUE)
-    # plt.scatter(*tree.get_leaf_locations().T, c='k', s=3.)
-
-    # # Show reconstructed tree
-    reconstructed = load_tree_from_nexus(tree_path=TREE_PATH)
-    plot_root(reconstructed.location, color=COLOR_ROOT_EST)
-    plot_hpd(reconstructed, HPD, alpha=0.5)
-
-    plt.axis('off')
-    plt.tight_layout(pad=0.)
-    plt.show()
-
-
-
-
-
-

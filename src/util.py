@@ -81,8 +81,6 @@ def read_locations_file(locations_path, delimiter='\t', swap_xy=False,
                 logging.warning('No location provided for society: %s' % name)
                 location_missing.append(name)
 
-            # TODO project here ?
-
             locations[name] = np.array([x, y])
 
     return locations, location_missing

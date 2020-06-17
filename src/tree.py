@@ -888,7 +888,6 @@ def parse_length(s):
 
 
 def parse_value(s):
-    # TODO do in a clean way
     try:
         return float(s)
     # except (NameError, SyntaxError):

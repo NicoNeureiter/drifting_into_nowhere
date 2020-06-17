@@ -159,7 +159,7 @@ class GridState(State):
 
     @property
     def death_rate(self):
-        return 0.  # TODO implement death
+        return 0.
 
     def step(self, last_step=False):
         if not self.stuck:

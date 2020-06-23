@@ -163,14 +163,15 @@ if __name__ == '__main__':
 
     # Experiment CLI arguments
     MOVEMENT_MODEL = parse_arg(1, 'rrw')
-    MAX_FOSSIL_AGE = parse_arg(2, 0, int)
+    MAX_FOSSIL_AGE = parse_arg(2, 0, float)
     N_REPEAT = parse_arg(3, 100, int)
     TREE_SIZE = parse_arg(4, NORMAL, int)
 
     # Set working directory
     today = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
+    max_age_str = str(MAX_FOSSIL_AGE if (MAX_FOSSIL_AGE % 1) else int(MAX_FOSSIL_AGE))
     WORKING_DIR = 'experiments/random_walk/{mm}_treesize={treesize}_fossils={max_age}/'
-    WORKING_DIR = WORKING_DIR.format(mm=MOVEMENT_MODEL, treesize=TREE_SIZE, max_age=MAX_FOSSIL_AGE)
+    WORKING_DIR = WORKING_DIR.format(mm=MOVEMENT_MODEL, treesize=TREE_SIZE, max_age=max_age_str)
     mkpath(WORKING_DIR)
 
     # Set cwd for logger

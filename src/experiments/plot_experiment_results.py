@@ -18,53 +18,9 @@ LABELS = {
     'hpd_95': '95% HPD',
 }
 
-# def plot_hpd_coverages(hpd_values, simulation, movement_model, fossil_age=None,
-#                        x_name='total_drift', ax=None):
-#     if ax is None:
-#         ax = plt.gca()
-#
-#     working_dir = os.path.join('experiments', simulation, movement_model)
-#     if fossil_age is not None:
-#         working_dir += '_fossils=%s' % fossil_age
-#     results_csv_path = os.path.join(working_dir, 'results.csv')
-#     results = pd.read_csv(results_csv_path)
-#
-#     # results = results.groupby('cone_angle').mean()
-#     results = results.groupby(x_name).mean()
-#     x = results.index
-#     for hpd in hpd_values:
-#         metric = 'hpd_%i'% hpd
-#         y = results[metric]
-#         ax.plot(x, y, label=metric)
-#
-#     ax.set_xlabel(LABELS[x_name], labelpad=LABELPAD_X)
-#
-#
-# def plot_error_stats(simulation, movement_model, fossil_age=None,
-#                      x_name='total_drift', ax=None):
-#     if ax is None:
-#         ax = plt.gca()
-#
-#     working_dir = os.path.join('experiments', simulation, movement_model)
-#     if fossil_age is not None:
-#         working_dir += '_fossils=%s' % fossil_age
-#     results_csv_path = os.path.join(working_dir, 'results.csv')
-#     results = pd.read_csv(results_csv_path)
-#
-#     results = results.groupby(x_name).mean()
-#     x = results.index
-#     results['bias'] = np.hypot(results['bias_x'],
-#                                results['bias_y'])
-#     results['observed_drift'] = np.hypot(results['observed_drift_x'],
-#                                           results['observed_drift_y'])
-#     for metric in ['bias', 'observed_drift']:  # 'rmse'
-#         ax.plot(x, results[metric], label=metric)
-#
-#     ax.set_xlabel(LABELS[x_name], labelpad=LABELPAD_X)
 
-
-def plot_error_stats_by_empirical_drift(simulation, movement_model, fossil_age=None,
-                                        x_name='cone_angle', ax=None):
+def plot_error_stats_by_empirical_drift(simulation, movement_model, fossil_age,
+                                        x_name, ax=None):
     if ax is None:
         ax = plt.gca()
 
@@ -98,7 +54,7 @@ def plot_error_stats_by_empirical_drift(simulation, movement_model, fossil_age=N
 
 
 def plot_error_stats_by_empirical_drift_varying_tree_size(simulation, movement_model, tree_size,
-                                                          x_name='cone_angle', ax=None):
+                                                          x_name, ax=None):
     if ax is None:
         ax = plt.gca()
 
@@ -156,17 +112,17 @@ if __name__ == '__main__':
     matplotlib.rc('xtick', labelsize=12)
     matplotlib.rc('ytick', labelsize=12)
 
-    # CE = 'constrained_expansion'
-    CE = 'constrained_expansion_20190829'
-    # RW = 'random_walk'
-    RW = 'random_walk_20190829'
+    """ __________________________ CONFIGURATION  __________________________ """
 
+    # CE = 'constrained_expansion'
+    # RW = 'random_walk'
+    CE = 'constrained_expansion_20190829'
+    RW = 'random_walk_20190829'
     SIMULATION = RW
-    # SIMULATION = CE
 
     HPD_VALUES = [95, 80]
-    # MOVEMENT_MODEL = 'brownian'
-    MOVEMENT_MODEL = 'rrw'
+    MOVEMENT_MODELS = ['rrw', 'cdrw']
+    TREE_SIZES = [50, 100, 300]
 
     PLOT_HPD = 1
     VARY_TREE_SIZE = 0
@@ -178,12 +134,12 @@ if __name__ == '__main__':
     else:
         raise ValueError('Unknown simulation type: %s' % SIMULATION)
 
-    MOVEMENT_MODELS = ['rrw', 'cdrw']#, 'rdrw']
     if SIMULATION == RW:
         FOSSIL_AGES = [0., 500., np.inf]
     else:
         FOSSIL_AGES = [None]
-    TREE_SIZES = [50, 100, 300]
+
+    """ ____________________________ PLOT SETUP ____________________________ """
 
     n_rows = len(MOVEMENT_MODELS)
     n_cols = len(TREE_SIZES) if VARY_TREE_SIZE else len(FOSSIL_AGES)
@@ -205,6 +161,8 @@ if __name__ == '__main__':
         else:
             set_column_labels(axes, map(format_fossil_age, FOSSIL_AGES))
 
+    """ ___________________________ PLOT RESULTS ___________________________ """
+
     for i, mm in enumerate(MOVEMENT_MODELS):
         if VARY_TREE_SIZE:
             for j, tree_size in enumerate(TREE_SIZES):
@@ -212,6 +170,8 @@ if __name__ == '__main__':
         else:
             for j, foss_age in enumerate(FOSSIL_AGES):
                 plot_error_stats_by_empirical_drift(SIMULATION, mm, fossil_age=foss_age, x_name=x_name, ax=axes[i, j])
+
+    """ ________________________ PLOT CONFIGURATION ________________________ """
 
     # Define legend location
     axes[0, -1].legend(loc=1)

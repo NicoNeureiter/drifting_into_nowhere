@@ -23,11 +23,15 @@ The experiment script takes command line arguments, defining:
 The results of the experiments are stored in a CSV file in an automatically generated folder at `experiments/random_walk/{mm}_treesize={treesize}_fossils={max_age}/` (e.g. `experiments/random_walk/rrw_treesize=100_fossils=0/` with standard settings).
 We can plot these results using the visualization script in `src/visualization/plot_experiments.py`. Running the migration experiment with a maximum sample age of 0, 500 and 'inf' and varying the total directional trend between 0 and 6000 yielded the following results (Figure 3a):
 
-![RW_error](figures/results/RW_error.png)
+<p align="center">
+  <img src="figures/results/RW_error.png" width="80%">
+</p>
 
 And the corresponding HPD coverage values, plotted with the script (Figure 3b):
 
-![RW_hpd](figures/results/RW_hpd.png)
+<p align="center">
+  <img src="figures/results/RW_hpd.png" width="80%">
+</p>
 
 ### Expansion simulations (region-growing process)
 In addition to the simple and well known random walk model we implemented a grid-based region-growing process (expansions).
@@ -37,11 +41,15 @@ the experiment script can be found in `src/experiments/experiment_expansion.py` 
 the results can be plotted using the same visualization script (`src/experiments/plot_experiment_results.py`).
 Running and plotting the experiments with varying degrees of directional trend yields the following errors (Figure 4a):
 
-![CE_error](figures/results/CE_error.png)
+<p align="center">
+  <img src="figures/results/CE_error.png" width="40%">
+</p>
 
 And the corresponding HPD coverage values, plotted with the script (Figure 4b):
 
-![CE_hpd](figures/results/CE_hpd.png)
+<p align="center">
+  <img src="figures/results/CE_hpd.png" width="40%">
+</p>
 
 #
 [1] Neureiter N., Ranacher P., Van Gijn R., Bickel B., Weibel R., *Can Bayesian phylogeography reconstruct migrations and expansions in human history?*, forthcoming

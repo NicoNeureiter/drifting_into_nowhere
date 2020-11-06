@@ -26,14 +26,6 @@
 		<alignment idref="alignment"/>
 	</patterns>
 
-	<!-- A prior assumption that the population size has remained constant       -->
-	<!-- throughout the time spanned by the genealogy.                           -->
-	<constantSize id="constant" units="substitutions">
-		<populationSize>
-			<parameter id="constant.popSize" value="1.0" lower="0.0"/>
-		</populationSize>
-	</constantSize>
-
 	<!-- The user-specified starting tree in a newick tree format.               -->
 	<newick id="startingTree" usingDates="true">
 		{tree};
@@ -52,16 +44,6 @@
 			<parameter id="treeModel.allInternalNodeHeights"/>
 		</nodeHeights>
 	</treeModel>
-
-	<!-- Generate a coalescent likelihood                                        -->
-	<coalescentLikelihood id="coalescent">
-		<model>
-			<constantSize idref="constant"/>
-		</model>
-		<populationTree>
-			<treeModel idref="treeModel"/>
-		</populationTree>
-	</coalescentLikelihood>
 
 	<!-- The strict clock (Uniform rates across branches)                        -->
 	<strictClockBranchRates id="branchRates">
@@ -118,19 +100,6 @@
 		</data>
 	</multivariateWishartPrior>
 
-	<!-- END Multivariate diffusion model                                        -->
-
-
-	<!-- Likelihood for tree given sequence data                                 -->
-	<treeLikelihood id="treeLikelihood" useAmbiguities="false">
-		<patterns idref="patterns"/>
-		<treeModel idref="treeModel"/>
-		<siteModel idref="siteModel"/>
-		<strictClockBranchRates idref="branchRates"/>
-	</treeLikelihood>
-
-	<!-- START Multivariate diffusion model                                      -->
-
 	<multivariateTraitLikelihood id="location.traitLikelihood" traitName="location" useTreeLength="true" scaleByTime="true" reportAsMultivariate="true" reciprocalRates="true" integrateInternalTraits="true">
 		<multivariateDiffusionModel idref="location.diffusionModel"/>
 		<treeModel idref="treeModel"/>
@@ -164,49 +133,25 @@
 
 	<!-- Define operators                                                        -->
 	<operators id="operators" optimizationSchedule="log">
-<!--
-		<deltaExchange delta="0.01" weight="1">
-			<parameter idref="frequencies"/>
-		</deltaExchange>
--->
-
-		<!-- START Multivariate diffusion model                                      -->
 		<precisionGibbsOperator weight="10">
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
 			<multivariateWishartPrior idref="location.precisionPrior"/>
 		</precisionGibbsOperator>
-
-		<!-- END Multivariate diffusion model                                        -->
-
 	</operators>
 
 	<!-- Define MCMC                                                             -->
 	<mcmc id="mcmc" chainLength="{chain_length}" autoOptimize="false" operatorAnalysis="nowhere.ops">
 		<posterior id="posterior">
 			<prior id="prior">
-				<uniformPrior lower="0.0" upper="1.0">
-					<parameter idref="frequencies"/>
-				</uniformPrior>
-				<oneOnXPrior>
-					<parameter idref="constant.popSize"/>
-				</oneOnXPrior>
-				<coalescentLikelihood idref="coalescent"/>
-				<strictClockBranchRates idref="branchRates"/>
-
 				<!-- START Multivariate diffusion model                                      -->
 				<multivariateWishartPrior idref="location.precisionPrior"/>
-
 				<!-- END Multivariate diffusion model                                        -->
 
 			</prior>
 			<likelihood id="likelihood">
-				<treeLikelihood idref="treeLikelihood"/>
-
 				<!-- START Multivariate diffusion model                                      -->
 				<multivariateTraitLikelihood idref="location.traitLikelihood"/>
-
 				<!-- END Multivariate diffusion model                                        -->
-
 			</likelihood>
 		</posterior>
 		<operators idref="operators"/>
@@ -228,36 +173,29 @@
 		</log>
 
 		<!-- write log to file                                                       -->
-		<log id="fileLog" logEvery="1000" fileName="nowhere.log" overwrite="true">
+		<log id="fileLog" logEvery="500" fileName="nowhere.log" overwrite="true">
 			<posterior idref="posterior"/>
 			<prior idref="prior"/>
 			<likelihood idref="likelihood"/>
 			<parameter idref="treeModel.rootHeight"/>
-			<parameter idref="constant.popSize"/>
-			<parameter idref="clock.rate"/>
-			<rateStatistic idref="meanRate"/>
 
 			<!-- START Multivariate diffusion model                                      -->
 			<matrixParameter idref="location.precision"/>
 			<correlation idref="location.correlation"/>
 			<matrixInverse idref="location.varCovar"/>
 			<continuousDiffusionStatistic idref="location.diffusionRate"/>
-
 			<!-- END Multivariate diffusion model                                        -->
 
-			<treeLikelihood idref="treeLikelihood"/>
 			<strictClockBranchRates idref="branchRates"/>
 
 			<!-- START Multivariate diffusion model                                      -->
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
-
 			<!-- END Multivariate diffusion model                                        -->
 
-			<coalescentLikelihood idref="coalescent"/>
 		</log>
 
 		<!-- write tree log to file                                                  -->
-		<logTree id="treeFileLog" logEvery="1000" nexusFormat="true" fileName="nowhere.trees" sortTranslationTable="true">
+		<logTree id="treeFileLog" logEvery="500" nexusFormat="true" fileName="nowhere.trees" sortTranslationTable="true">
 			<treeModel idref="treeModel"/>
 			<trait name="rate" tag="rate">
 				<strictClockBranchRates idref="branchRates"/>
@@ -275,7 +213,6 @@
 			<!-- START Multivariate diffusion model                                      -->
 			<multivariateDiffusionModel idref="location.diffusionModel"/>
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
-
 			<!-- END Multivariate diffusion model                                        -->
 
 		</logTree>

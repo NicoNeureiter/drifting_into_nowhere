@@ -118,18 +118,6 @@
 		</data>
 	</multivariateWishartPrior>
 
-	<!-- END Multivariate diffusion model                                        -->
-
-
-	<!--&lt;!&ndash; Likelihood for tree given sequence data                                 &ndash;&gt;-->
-	<!--<treeLikelihood id="treeLikelihood" useAmbiguities="false">-->
-		<!--<patterns idref="patterns"/>-->
-		<!--<treeModel idref="treeModel"/>-->
-		<!--<siteModel idref="siteModel"/>-->
-		<!--<strictClockBranchRates idref="branchRates"/>-->
-	<!--</treeLikelihood>-->
-
-	<!-- START Multivariate diffusion model                                      -->
 	<discretizedBranchRates id="location.diffusionRates">
 		<treeModel idref="treeModel"/>
 		<distribution>
@@ -146,7 +134,6 @@
 			<parameter id="location.rrwCategories"/>
 		</rateCategories>
 	</discretizedBranchRates>
-
 
 	<multivariateTraitLikelihood id="location.traitLikelihood" traitName="location" useTreeLength="true" scaleByTime="true" reportAsMultivariate="true" reciprocalRates="true" integrateInternalTraits="true">
 		<multivariateDiffusionModel idref="location.diffusionModel"/>
@@ -182,12 +169,6 @@
 
 	<!-- Define operators                                                        -->
 	<operators id="operators" optimizationSchedule="log">
-<!--
-		<deltaExchange delta="0.01" weight="1">
-			<parameter idref="frequencies"/>
-		</deltaExchange>
--->
-
 		<scaleOperator scaleFactor="0.9" weight="5">
 			<parameter idref="location.stdev"/>
 		</scaleOperator>
@@ -200,46 +181,23 @@
 {tree_operators}
 {height_operators}
 
-		<!-- START Multivariate diffusion model                                      -->
 		<precisionGibbsOperator weight="10">
 			<multivariateTraitLikelihood idref="location.traitLikelihood"/>
 			<multivariateWishartPrior idref="location.precisionPrior"/>
 		</precisionGibbsOperator>
-
-		<!-- END Multivariate diffusion model                                        -->
-
 	</operators>
 
 	<!-- Define MCMC                                                             -->
 	<mcmc id="mcmc" chainLength="{chain_length}" autoOptimize="false" operatorAnalysis="nowhere.ops">
 		<posterior id="posterior">
 			<prior id="prior">
-				<!--<uniformPrior lower="0.0" upper="1.0">-->
-					<!--<parameter idref="frequencies"/>-->
-				<!--</uniformPrior>-->
-				<!--<oneOnXPrior>-->
-					<!--<parameter idref="constant.popSize"/>-->
-				<!--</oneOnXPrior>-->
 				<exponentialPrior mean="0.3333333333333333" offset="0.0">
 					<parameter idref="location.stdev"/>
 				</exponentialPrior>
-				<!--<coalescentLikelihood idref="coalescent"/>  ??????????????????????????????? -->
-				<!--<strictClockBranchRates idref="branchRates"/>  ??????????????????????????????? -->
-
-				<!-- START Multivariate diffusion model                                      -->
 				<multivariateWishartPrior idref="location.precisionPrior"/>
-
-				<!-- END Multivariate diffusion model                                        -->
-
 			</prior>
 			<likelihood id="likelihood">
-				<!--<treeLikelihood idref="treeLikelihood"/>-->
-
-				<!-- START Multivariate diffusion model                                      -->
 				<multivariateTraitLikelihood idref="location.traitLikelihood"/>
-
-				<!-- END Multivariate diffusion model                                        -->
-
 			</likelihood>
 		</posterior>
 		<operators idref="operators"/>

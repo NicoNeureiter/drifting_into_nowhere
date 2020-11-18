@@ -117,6 +117,7 @@ def run_experiment(n_steps, n_expected_leafs, total_drift,
 
         if valid_tree and (max_fossil_age > 0):
             if tree_simu.height() < n_steps:
+                # This might happen if all languages on one side of the first split go extinct.
                 valid_tree = False
                 print('Invalid: Tree lost in height!')
             elif tree_simu.n_fossils() < min_n_fossils:
@@ -196,8 +197,8 @@ if __name__ == '__main__':
 
         # Analysis parameters
         'movement_model': MOVEMENT_MODEL,
-        'chain_length': 350000,
-        'burnin': 50000,
+        'chain_length': 1000000,
+        'burnin': 100000,
 
         # Evaluation parameters
         'hpd_values': HPD_VALUES

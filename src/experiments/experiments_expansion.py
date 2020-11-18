@@ -52,6 +52,7 @@ def run_experiment(n_steps, grid_size, cone_angle, split_size_range,
                                                p_grow_distr=p_grow_distr,
                                                cone_angle=cone_angle,
                                                split_size_range=split_size_range)
+
     run_simulation(n_steps, tree_simu, world)
     root = tree_simu.location
 
@@ -125,20 +126,23 @@ if __name__ == '__main__':
     }
     default_settings.update(simulation_settings)
 
-    EVAL_METRICS = ['size', 'imbalance', 'deep_imbalance',
-                    'space_div_dependence', 'clade_overlap']
-
-    if MOVEMENT_MODEL != 'tree_statistics':
-        EVAL_METRICS += ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
-                        ['hpd_%i' % p for p in HPD_VALUES] + \
-                        ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm']
+    if MOVEMENT_MODEL == 'tree_statistics':
+        EVAL_METRICS = ['size', 'imbalance', 'deep_imbalance',
+                        'space_div_dependence', 'clade_overlap',
+                        # 'mean_area_size', 'stdev_area_size',
+                        # 'mean_area_size_rel', 'stdev_area_size_rel'
+                        ]
+    else:
+        EVAL_METRICS = ['rmse', 'bias_x', 'bias_y', 'bias_norm', 'stdev'] + \
+                       ['hpd_%i' % p for p in HPD_VALUES] + \
+                       ['observed_stdev', 'observed_drift_x',  'observed_drift_y', 'observed_drift_norm']
 
     # Safe the default settings
     with open(WORKING_DIR+'settings.json', 'w') as json_file:
         json.dump(default_settings, json_file)
 
     # Run the experiment
-    variable_parameters = {'cone_angle': np.linspace(0.25, 2, 8) * np.pi}
+    variable_parameters = {'cone_angle': np.linspace(0.2, 2, 10) * np.pi}
     experiment = Experiment(run_experiment, default_settings, variable_parameters,
                             EVAL_METRICS, N_REPEAT, WORKING_DIR)
-    experiment.run(resume=1)
+    experiment.run(resume=0)

@@ -178,6 +178,8 @@ def run_simulation(n_steps, root, world, condition_on_root=False):
         root (State): The initial state of the simulation.
         world (World): The environment of the simulation, keeping track of all
             states, providing some utility methods, relating to global properties.
+        condition_on_root (bool): Ensure that the provided root is actually the root
+                                  (i.e. splits at the start into two surviving clades).
     """
     root_init = deepcopy(root)
     world_init = deepcopy(world)
